@@ -89,7 +89,7 @@
 
             try {
                 // Send Model Choice to Server
-                const response = await fetch('/.netlify/functions/search', {
+                const response = await fetch('https://zero02-liga.onrender.com/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
