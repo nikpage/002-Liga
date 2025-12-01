@@ -6,13 +6,12 @@ exports.handler = async (event) => {
     neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS)
   );
 
-  // 1. PARSE INPUT (Now accepts model choice)
+  // 1. PARSE INPUT
   let question, history, selectedModel;
   try {
       const body = JSON.parse(event.body);
       question = body.question;
       history = body.history || [];
-      // Default to 2.5 Flash if nothing is selected
       selectedModel = body.model || "gemini-2.5-flash";
   } catch (e) {
       return { statusCode: 400, body: JSON.stringify({ answer: "Invalid JSON" }) };
@@ -33,28 +32,47 @@ exports.handler = async (event) => {
     const qVector = embData.embedding.values;
 
     // 3. SEARCH NEO4J
-        const result = await session.run(`
-          // 1. Search the CHUNK index (not document index)
-          CALL db.index.vector.queryNodes('chunk_vector_index', 10, $vec)
-          YIELD node, score
+    const result = await session.run(`
+      CALL db.index.vector.queryNodes('chunk_vector_index', 10, $vec)
+      YIELD node, score
+      MATCH (node)-[:PART_OF]->(d:Document)
+      RETURN node.text AS text, d.title AS title, d.url AS url, score
+      ORDER BY score DESC
+    `, { vec: qVector });
 
-          // 2. Match the parent Document
-          MATCH (node)-[:PART_OF]->(d:Document)
+    // 4. PROCESS DATA
+    const contextParts = [];
+    const uniqueSources = new Map();
 
-          // 3. Combine text with the Czech Footer so the AI sees the link
-          RETURN node.text + "\n\n**Zdroj:** [" + d.title + "](" + d.url + ")" AS text, score
-          ORDER BY score DESC
-        `, { vec: qVector });
+    result.records.forEach(r => {
+        const title = r.get("title");
+        const url = r.get("url");
+        if (title) {
+            contextParts.push(`ZDROJ: "${title}"\nTEXT: ${r.get("text")}`);
+            if (url) uniqueSources.set(url, title);
+        } else {
+            contextParts.push(r.get("text"));
+        }
+    });
+    const context = contextParts.join("\n\n---\n\n");
 
-        const context = result.records.map(r => r.get("text")).join("\n\n");
-
-    // 4. PREPARE HISTORY
     const historyBlock = history.map(msg =>
         `${msg.role === 'user' ? 'Uživatel' : 'Asistent'}: ${msg.content}`
     ).join("\n");
 
-    // 5. GENERATE (Using the SELECTED Model)
-    const prompt = `Jsi asistent. Odpověz na otázku podle kontextu a historie chatu.
+    // 5. GENERATE (STRICTER PROMPT)
+    const prompt = `Jsi asistent. Odpověz na otázku podle kontextu.
+
+    INSTRUKCE PRO ODKAZY:
+    1. Pokud odpověď zmiňuje konkrétní formulář, šablonu nebo dokument, uveď jeho název v závorce přímo v textu (viz: Název).
+    2. Používej pouze názvy uvedené v sekcích "ZDROJ:".
+
+    INSTRUKCE PRO NÁVRHY (Next Steps):
+    Na úplný konec odpovědi přidej sekci "///SUGGESTIONS///" a pod ni vypiš 3 velmi krátké (max 4 slova) otázky.
+    PRAVIDLA PRO NÁVRHY:
+    1. Navrhuj POUZE otázky, na které lze najít odpověď v sekci "NOVÁ FAKTA". Nevymýšlej si témata mimo kontext.
+    2. Pokud text popisuje proces nebo návod, jeden z návrhů MUSÍ být: "Postup krok za krokem".
+    3. Pokud text je složitý, navrhni: "Vysvětli to jednoduše".
 
     HISTORIE CHATU:
     ${historyBlock}
@@ -66,7 +84,6 @@ exports.handler = async (event) => {
 
     Odpověď:`;
 
-    // Dynamic URL based on selectedModel variable
     const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,11 +94,35 @@ exports.handler = async (event) => {
     const genData = await genReq.json();
 
     if (genData.error) throw new Error(genData.error.message);
-    const answer = genData.candidates[0].content.parts[0].text;
+
+    let rawText = genData.candidates[0].content.parts[0].text;
+    let suggestions = [];
+
+    // 6. PARSE SUGGESTIONS
+    if (rawText.includes("///SUGGESTIONS///")) {
+        const parts = rawText.split("///SUGGESTIONS///");
+        rawText = parts[0].trim();
+
+        suggestions = parts[1].split("\n")
+            .map(s => s.replace(/^[-\d\.]+\s*/, "").replace(/["']/g, "").trim()) // Clean up numbering and quotes
+            .filter(s => s.length > 0)
+            .slice(0, 3);
+    }
+
+    // 7. APPEND LINKS
+    if (uniqueSources.size > 0) {
+        rawText += "\n\n**Zdroje:**";
+        uniqueSources.forEach((title, url) => {
+            rawText += `\n- [${title}](${url})`;
+        });
+    }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ answer: answer })
+      body: JSON.stringify({
+          answer: rawText,
+          suggestions: suggestions
+      })
     };
 
   } catch (e) {
