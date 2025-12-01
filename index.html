@@ -26,7 +26,7 @@
         .msg-toolbar {
             display: flex;
             gap: 10px;
-            justify-content: center; /* CENTERED */
+            justify-content: center;
             margin-top: 15px;
             padding-top: 10px;
             border-top: 1px solid #ccc;
@@ -57,12 +57,12 @@
             transform: translateY(-1px);
         }
 
-        /* SUGGESTION BUTTON STYLES (NOW CENTERED) */
+        /* SUGGESTION BUTTON STYLES (CENTERED) */
         .suggestions-container {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            justify-content: center; /* CENTERED alignment */
+            justify-content: center;
             margin-bottom: 15px;
             margin-top: 5px;
             width: 100%;
@@ -181,6 +181,7 @@
             downloadFile('chat_historie.txt', text);
         }
 
+        // UPDATED: Now returns the message element so we can control it later
         function addMessage(role, content) {
             const msgs = document.getElementById('messages');
             const newMsg = document.createElement('div');
@@ -212,7 +213,13 @@
 
             msgs.appendChild(newMsg);
 
-            newMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Only force scroll for user messages here.
+            // Assistant scroll is handled in ask() to prevent "button drag"
+            if (role === 'user') {
+                newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+
+            return newMsg; // Return element for later use
         }
 
         function addSuggestions(suggestions) {
@@ -231,7 +238,7 @@
             });
 
             msgs.appendChild(container);
-            container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // REMOVED: container.scrollIntoView - this was causing the issue!
         }
 
         function startProgress() {
@@ -303,12 +310,20 @@
                 stopProgress(false);
                 const data = await response.json();
 
-                addMessage('assistant', data.answer);
+                // 1. Add Answer & Capture the element
+                const answerElement = addMessage('assistant', data.answer);
                 chatHistory.push({ role: "assistant", content: data.answer });
 
+                // 2. Add Buttons (silently, without scrolling)
                 if (data.suggestions) {
                     addSuggestions(data.suggestions);
                 }
+
+                // 3. FORCE SCROLL TO TOP OF ANSWER (Overrides everything else)
+                // Small delay ensures DOM is fully rendered before scrolling
+                setTimeout(() => {
+                    answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
 
             } catch (error) {
                 stopProgress(true);
