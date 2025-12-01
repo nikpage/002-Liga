@@ -33,14 +33,20 @@ exports.handler = async (event) => {
     const qVector = embData.embedding.values;
 
     // 3. SEARCH NEO4J
-    const result = await session.run(`
-      CALL db.index.vector.queryNodes('document_vector_index', 10, $vec)
-      YIELD node, score
-      RETURN node.text AS text, score
-      ORDER BY score DESC
-    `, { vec: qVector });
+        const result = await session.run(`
+          // 1. Search the CHUNK index (not document index)
+          CALL db.index.vector.queryNodes('chunk_vector_index', 10, $vec)
+          YIELD node, score
 
-    const context = result.records.map(r => r.get("text")).join("\n\n");
+          // 2. Match the parent Document
+          MATCH (node)-[:PART_OF]->(d:Document)
+
+          // 3. Combine text with the Czech Footer so the AI sees the link
+          RETURN node.text + "\n\n**Zdroj:** [" + d.title + "](" + d.url + ")" AS text, score
+          ORDER BY score DESC
+        `, { vec: qVector });
+
+        const context = result.records.map(r => r.get("text")).join("\n\n");
 
     // 4. PREPARE HISTORY
     const historyBlock = history.map(msg =>
