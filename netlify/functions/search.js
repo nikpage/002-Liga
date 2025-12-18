@@ -18,7 +18,6 @@ exports.handler = async (event) => {
 
   const session = driver.session();
   try {
-    // Generate embedding vector using the model aligned with ingestion
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,7 +29,6 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // Execute vector search against the 'chunk_vector_index'
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 10, $vec)
       YIELD node, score
@@ -38,7 +36,6 @@ exports.handler = async (event) => {
       ORDER BY score DESC
     `, { vec: qVector });
 
-    // Format retrieved context from Chunk nodes
     const contextParts = [];
     const uniqueSources = new Set();
 
@@ -58,7 +55,6 @@ exports.handler = async (event) => {
         `${msg.role === 'user' ? 'Uživatel' : 'Asistent'}: ${msg.content}`
     ).join("\n");
 
-    // Construct prompt with context, history, and formatting instructions
     const prompt = `Jsi asistent. Odpověz na otázku podle kontextu.
 
     INSTRUKCE PRO ODKAZY:
@@ -78,7 +74,6 @@ exports.handler = async (event) => {
 
     Odpověď:`;
 
-    // Generate final response using the selected Gemini model
     const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,7 +88,6 @@ exports.handler = async (event) => {
     let rawText = genData.candidates[0].content.parts[0].text;
     let suggestions = [];
 
-    // Parse suggestions if present
     if (rawText.includes("///SUGGESTIONS///")) {
         const parts = rawText.split("///SUGGESTIONS///");
         rawText = parts[0].trim();
