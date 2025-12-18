@@ -36,6 +36,21 @@ exports.handler = async (event) => {
       ORDER BY score DESC
     `, { vec: qVector });
 
+    const suppResult = await session.run(`
+      MATCH (s:Supplier)
+      RETURN s.name + ' (' + s.city + ')' AS text, s.source AS source
+      LIMIT 5
+    `);
+
+    const rentalResult = await session.run(`
+      MATCH (r:Rental)
+      RETURN r.name + ' (' + r.city + ')' AS text, r.source AS source
+      LIMIT 5
+    `);
+
+    suppResult.records.forEach(rec => result.records.push(rec));
+    rentalResult.records.forEach(rec => result.records.push(rec));
+
     const contextParts = [];
     const uniqueSources = new Set();
 
