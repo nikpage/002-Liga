@@ -18,7 +18,7 @@ exports.handler = async (event) => {
 
   const session = driver.session();
   try {
-    // 2. EMBED QUESTION (MATCHING INGESTION MODEL)
+    // Generate embedding vector using the model aligned with ingestion
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,23 +30,21 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 3. SEARCH NEO4J (MATCHING INGESTION INDEX)
-    // Note: LangChain Neo4jVector stores text in 'text' and metadata like 'source' directly on the node.
+    // Execute vector search against the 'chunk_vector_index'
     const result = await session.run(`
-      CALL db.index.vector.queryNodes('vector_index', 10, $vec)
+      CALL db.index.vector.queryNodes('chunk_vector_index', 10, $vec)
       YIELD node, score
       RETURN node.text AS text, node.source AS source, score
       ORDER BY score DESC
     `, { vec: qVector });
 
-    // 4. PROCESS DATA
+    // Format retrieved context from Chunk nodes
     const contextParts = [];
     const uniqueSources = new Set();
 
     result.records.forEach(r => {
         const text = r.get("text");
         const source = r.get("source");
-        
         if (source) {
             contextParts.push(`ZDROJ: "${source}"\nTEXT: ${text}`);
             uniqueSources.add(source);
@@ -60,17 +58,15 @@ exports.handler = async (event) => {
         `${msg.role === 'user' ? 'Uživatel' : 'Asistent'}: ${msg.content}`
     ).join("\n");
 
-    // 5. GENERATE
+    // Construct prompt with context, history, and formatting instructions
     const prompt = `Jsi asistent. Odpověz na otázku podle kontextu.
 
     INSTRUKCE PRO ODKAZY:
-    1. Pokud odpověď vychází z konkrétního souboru, uveď jeho název (např. soubor.pdf).
+    1. Pokud odpověď vychází z konkrétního souboru, uveď jeho název.
     2. Používej pouze názvy ze sekcí "ZDROJ:".
 
     INSTRUKCE PRO NÁVRHY (Next Steps):
-    Na úplný konec přidej "///SUGGESTIONS///" a 3 krátké otázky (max 4 slova) vyplývající z NOVÝCH FAKTŮ.
-    1. Pokud je to návod -> "Postup krok za krokem".
-    2. Pokud je to složité -> "Vysvětli to jednoduše".
+    Na úplný konec přidej "///SUGGESTIONS///" a 3 krátké otázky.
 
     HISTORIE CHATU:
     ${historyBlock}
@@ -82,6 +78,7 @@ exports.handler = async (event) => {
 
     Odpověď:`;
 
+    // Generate final response using the selected Gemini model
     const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,6 +93,7 @@ exports.handler = async (event) => {
     let rawText = genData.candidates[0].content.parts[0].text;
     let suggestions = [];
 
+    // Parse suggestions if present
     if (rawText.includes("///SUGGESTIONS///")) {
         const parts = rawText.split("///SUGGESTIONS///");
         rawText = parts[0].trim();
@@ -114,14 +112,10 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-          answer: rawText,
-          suggestions: suggestions
-      })
+      body: JSON.stringify({ answer: rawText, suggestions: suggestions })
     };
 
   } catch (e) {
-    console.error(e);
     return { statusCode: 200, body: JSON.stringify({ answer: "SYSTEM ERROR: " + e.message }) };
   } finally {
     await session.close();
