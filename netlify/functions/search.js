@@ -6,7 +6,6 @@ exports.handler = async (event) => {
     neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS)
   );
 
-  // 1. PARSE INPUT
   let question, history, selectedModel;
   try {
       const body = JSON.parse(event.body);
@@ -19,39 +18,40 @@ exports.handler = async (event) => {
 
   const session = driver.session();
   try {
-    // 2. EMBED QUESTION
-    const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
+    // 2. EMBED QUESTION (MATCHING INGESTION MODEL)
+    const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: "models/text-embedding-004",
+            model: "models/embedding-001",
             content: { parts: [{ text: question }] }
         })
     });
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 3. SEARCH NEO4J
+    // 3. SEARCH NEO4J (MATCHING INGESTION INDEX)
+    // Note: LangChain Neo4jVector stores text in 'text' and metadata like 'source' directly on the node.
     const result = await session.run(`
-      CALL db.index.vector.queryNodes('chunk_vector_index', 10, $vec)
+      CALL db.index.vector.queryNodes('vector_index', 10, $vec)
       YIELD node, score
-      MATCH (node)-[:PART_OF]->(d:Document)
-      RETURN node.text AS text, d.title AS title, d.url AS url, score
+      RETURN node.text AS text, node.source AS source, score
       ORDER BY score DESC
     `, { vec: qVector });
 
     // 4. PROCESS DATA
     const contextParts = [];
-    const uniqueSources = new Map();
+    const uniqueSources = new Set();
 
     result.records.forEach(r => {
-        const title = r.get("title");
-        const url = r.get("url");
-        if (title) {
-            contextParts.push(`ZDROJ: "${title}"\nTEXT: ${r.get("text")}`);
-            if (url) uniqueSources.set(url, title);
+        const text = r.get("text");
+        const source = r.get("source");
+        
+        if (source) {
+            contextParts.push(`ZDROJ: "${source}"\nTEXT: ${text}`);
+            uniqueSources.add(source);
         } else {
-            contextParts.push(r.get("text"));
+            contextParts.push(text);
         }
     });
     const context = contextParts.join("\n\n---\n\n");
@@ -60,19 +60,17 @@ exports.handler = async (event) => {
         `${msg.role === 'user' ? 'Uživatel' : 'Asistent'}: ${msg.content}`
     ).join("\n");
 
-    // 5. GENERATE (STRICTER PROMPT)
+    // 5. GENERATE
     const prompt = `Jsi asistent. Odpověz na otázku podle kontextu.
 
     INSTRUKCE PRO ODKAZY:
-    1. Pokud odpověď zmiňuje konkrétní formulář, šablonu nebo dokument, uveď jeho název v závorce přímo v textu (viz: Název).
-    2. Používej pouze názvy uvedené v sekcích "ZDROJ:".
+    1. Pokud odpověď vychází z konkrétního souboru, uveď jeho název (např. soubor.pdf).
+    2. Používej pouze názvy ze sekcí "ZDROJ:".
 
     INSTRUKCE PRO NÁVRHY (Next Steps):
-    Na úplný konec odpovědi přidej sekci "///SUGGESTIONS///" a pod ni vypiš 3 velmi krátké (max 4 slova) otázky.
-    PRAVIDLA PRO NÁVRHY:
-    1. Navrhuj POUZE otázky, na které lze najít odpověď v sekci "NOVÁ FAKTA". Nevymýšlej si témata mimo kontext.
-    2. Pokud text popisuje proces nebo návod, jeden z návrhů MUSÍ být: "Postup krok za krokem".
-    3. Pokud text je složitý, navrhni: "Vysvětli to jednoduše".
+    Na úplný konec přidej "///SUGGESTIONS///" a 3 krátké otázky (max 4 slova) vyplývající z NOVÝCH FAKTŮ.
+    1. Pokud je to návod -> "Postup krok za krokem".
+    2. Pokud je to složité -> "Vysvětli to jednoduše".
 
     HISTORIE CHATU:
     ${historyBlock}
@@ -98,22 +96,19 @@ exports.handler = async (event) => {
     let rawText = genData.candidates[0].content.parts[0].text;
     let suggestions = [];
 
-    // 6. PARSE SUGGESTIONS
     if (rawText.includes("///SUGGESTIONS///")) {
         const parts = rawText.split("///SUGGESTIONS///");
         rawText = parts[0].trim();
-
         suggestions = parts[1].split("\n")
-            .map(s => s.replace(/^[-\d\.]+\s*/, "").replace(/["']/g, "").trim()) // Clean up numbering and quotes
+            .map(s => s.replace(/^[-\d\.]+\s*/, "").replace(/["']/g, "").trim())
             .filter(s => s.length > 0)
             .slice(0, 3);
     }
 
-    // 7. APPEND LINKS
     if (uniqueSources.size > 0) {
         rawText += "\n\n**Zdroje:**";
-        uniqueSources.forEach((title, url) => {
-            rawText += `\n- [${title}](${url})`;
+        uniqueSources.forEach((src) => {
+            rawText += `\n- ${src}`;
         });
     }
 
