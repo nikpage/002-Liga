@@ -131,3 +131,28 @@ exports.handler = async (event) => {
     await driver.close();
   }
 };
+async function getInsuranceData(driver, question) {
+  const session = driver.session();
+  try {
+    const result = await session.run(
+      `CALL db.index.fulltext.queryNodes("insuranceSearch", $question) YIELD node, score
+       WHERE score > 0.2
+       WITH node AS v LIMIT 3
+       MATCH (h:Equipment)-[:HAS_VARIANT]->(v)
+       OPTIONAL MATCH (v)-[:CAN_BE_PRESCRIBED_BY]->(d:DoctorSpecialization)
+       RETURN h.name as type, v.variant_name as variant, v.coverage_czk_without_dph as price, collect(d.name) as doctors`,
+      { question: question }
+    );
+
+    if (result.records.length === 0) return "";
+
+    return result.records.map(r =>
+      `INSURANCE DATA: The ${r.get('type')} (${r.get('variant')}) costs ${r.get('price')} CZK. Prescribed by: ${r.get('doctors').join(', ')}.`
+    ).join('\n');
+  } catch (e) {
+    console.log("Graph search error:", e);
+    return "";
+  } finally {
+    await session.close();
+  }
+}
