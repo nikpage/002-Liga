@@ -16,32 +16,31 @@ exports.handler = async (event) => {
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 5, $vec)
       YIELD node, score
-      MATCH (node)-[:PART_OF]->(d:Document)
+      OPTIONAL MATCH (node)-[:PART_OF]->(d:Document)
       OPTIONAL MATCH (v:EquipmentVariant) 
       WHERE any(word IN split(toLower($q), ' ') WHERE v.variant_name CONTAINS word)
       RETURN 
-        collect(DISTINCT {text: node.text, src: d.human_name, url: d.url}) AS chunks,
+        collect(DISTINCT {text: node.text, src: coalesce(d.human_name, node['id:ID']), url: d.url}) AS chunks,
         collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS specifics
     `, { vec: qVector, q: question.toLowerCase() });
 
     const record = result.records[0];
     const context = [
-      ...record.get("specifics").filter(v => v.name).map(v => `PŘESNÁ DATA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
-      ...record.get("chunks").map(c => `ZDROJ: ${c.src} (Link: ${c.url}) | TEXT: ${c.text}`)
+      ...record.get("specifics").filter(v => v.name).map(v => `DATA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
+      ...record.get("chunks").map(c => `ZDROJ: ${c.src} (Link: ${c.url || 'N/A'}) | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    const prompt = `Jsi seniorní sociální poradce české charity Liga vozíčkářů. 
-    Mluvíš s lidmi s handicapem (9. třída ZŠ úroveň).
+    const prompt = `Jsi seniorní poradce Ligy vozíčkářů. Odpovídáš handicapovaným lidem (úroveň 9. třídy ZŠ).
     
-    STRUKTURA ODPOVĚDI:
-    1. ZAČNI '## Stručně'. Použij Markdown tabulku pro peníze/termíny. Buď velmi stručný.
-    2. NÁSLEDUJE '## Podrobné vysvětlení'. 
-    3. FORMÁT: Oddělovač tisíců je tečka (10.000 Kč). Žádná desetinná místa, pokud nejsou v datech.
-    4. VÝPOČET: Pokud je pomůcka levná (<10.000 Kč), spočítej 8x životní minimum (8 * 4.620 Kč = 36.960 Kč) a vysvětli, že toto je limit příjmu.
-    5. KONTAKT: Na konec přidej: 'Pro více informací napište na info@ligavozic.cz (do emailu můžete zkopírovat tento chat).'
-    6. TLAČÍTKA: Na úplný konec napiš '///SUGGESTIONS///' a pak 3 krátké věcné otázky (každá na 1 řádek).
+    PRAVIDLA FORMÁTU:
+    1. ZAČNI nadpisem '### HLAVNÍ BODY' (TL;DR). Použij tabulku pro peníze/lhůty. 
+    2. PAK '### DETAILNÍ VYSVĚTLENÍ'. Žádné zdvořilostní kecy na začátku.
+    3. ČÍSLA: Tisíce odděluj tečkou (např. 6.957 Kč).
+    4. ZDROJE: Na konci vypiš 3 nejdůležitější zdroje jako funkční odkazy [Název](URL). Pokud URL není, dej jen název.
+    5. KONTAKT: info@ligavozic.cz.
+    6. TLAČÍTKA: Na konec dej '///SUGGESTIONS///' a pod to 3 věcné otázky na 1 řádek.
 
-    DATA: ${context}
+    KONTEXT: ${context}
     OTÁZKA: ${question}`;
 
     const genReq = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/\${model}:generateContent?key=\${process.env.GOOGLE_API_KEY}\`, {
