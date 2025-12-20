@@ -4,41 +4,34 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
 
     try {
-        const { prompt, type, chatHistory } = JSON.parse(event.body);
+        // VERIFIED: Extracting 'question', 'history', and 'type' from the frontend call
+        const { question, history, type } = JSON.parse(event.body);
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         let finalPrompt = "";
 
         if (type === "calc") {
-            // Generates an actual interactive HTML/JS calculator based on the specific context
-            finalPrompt = `Based on this: "${prompt}", create a functional HTML calculator.
-            Return ONLY the HTML/JS code. It must calculate specific Czech disability limits.
-            No conversational text allowed.`;
+            finalPrompt = `Na základě konverzace: "${JSON.stringify(history)}", vytvoř HTML/JS kalkulačku. Vrať POUZE kód.`;
         } else if (type === "email") {
-            // Summarizes the chat history to prepare a help desk email
-            finalPrompt = `Based on this chat: "${chatHistory}", write a professional email draft for a help desk.
-            Include the key points from the conversation. Return ONLY the email body.`;
+            finalPrompt = `Na základě historie: "${JSON.stringify(history)}", napiš e-mail pro poradnu. Vrať POUZE text.`;
         } else if (type === "step") {
-            // FIX: Prevents 502 timeout by limiting response to 5 short steps
-            finalPrompt = `Stručně a jasně rozepiš tento postup do 5 očíslovaných bodů.
-            Max 2 věty na bod: ${prompt}`;
+            finalPrompt = `Rozepiš tento postup do 5 bodů: ${question}`;
         } else {
-            finalPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Stručně odpověz: ${prompt}`;
+            finalPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Odpověz na: ${question}. Historie: ${JSON.stringify(history)}`;
         }
 
         const result = await model.generateContent(finalPrompt);
         const response = await result.response;
         const text = response.text();
 
-        // Standard Netlify return format to prevent gateway errors
+        // VERIFIED: Returning the key 'answer' to match frontend expectations
         return {
             statusCode: 200,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text })
+            body: JSON.stringify({ answer: text })
         };
     } catch (error) {
-        // Fallback return to prevent a 502 crash if AI fails
-        return { statusCode: 200, body: JSON.stringify({ text: "Chyba: Zkuste to znovu." }) };
+        return { statusCode: 200, body: JSON.stringify({ answer: "Chyba: Zkuste to znovu." }) };
     }
 };
