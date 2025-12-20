@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       if (!embData.embedding) throw new Error("Embedding failed");
       const qVector = embData.embedding.values;
 
-      // 2. Neo4j - Secure record access
+      // 2. Neo4j
       const session = driver.session();
       const result = await session.run(`
         CALL db.index.vector.queryNodes('chunk_vector_index', 4, $vec)
@@ -62,18 +62,23 @@ exports.handler = async (event) => {
       if (!genData.candidates || !genData.candidates[0]) throw new Error("AI response empty");
 
       const rawAiOutput = genData.candidates[0].content.parts[0].text;
+
+      // RESTORED: Source handling logic
+      const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src || "Zdroj", url: c.url || "#"}))))
+                              .map(str => JSON.parse(str));
+      const sourcesPart = uniqueDocs.map(d => `- [${d.src}](${d.url})`).join('\n');
+
       let finalAnswer = "";
 
       try {
-        // Attempt to parse JSON and extract data
         const responseJson = JSON.parse(rawAiOutput);
         const summary = Array.isArray(responseJson.summary) ? responseJson.summary.join('\n') : (responseJson.summary || "");
-        const detail = responseJson.detail || responseJson.answer || JSON.stringify(responseJson);
+        const detail = responseJson.detail || responseJson.answer || "";
 
-        finalAnswer = `## Stručně\n${summary}\n\n## Detail\n${detail}`;
+        finalAnswer = `## Stručně\n${summary}\n\n## Detail\n${detail}\n\n## Zdroje\n${sourcesPart}`;
       } catch (parseError) {
-        // Fallback: If JSON parsing fails, just show the raw text so the user sees SOMETHING
-        finalAnswer = `## Odpověď\n${rawAiOutput}`;
+        // Fallback if JSON fails, still includes the sources
+        finalAnswer = `## Odpověď\n${rawAiOutput}\n\n## Zdroje\n${sourcesPart}`;
       }
 
       return {
@@ -86,7 +91,7 @@ exports.handler = async (event) => {
     return await Promise.race([requestLogic(), timeout]);
 
   } catch (err) {
-    console.error("Error:", err.message);
+    console.error("Error detected:", err.message);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
