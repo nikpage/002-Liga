@@ -5,124 +5,48 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background-color: #f0f2f5; }
-
         #chat-container {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            min-height: 400px;
-            display: flex;
-            flex-direction: column;
+            background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 400px; display: flex; flex-direction: column;
         }
-
         #messages { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; max-height: 500px; display: flex; flex-direction: column; scroll-behavior: smooth; }
-
         .message { margin-bottom: 20px; padding: 15px; border-radius: 15px; max-width: 85%; line-height: 1.6; position: relative; }
         .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
         .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 50px; }
 
-        /* TOOLBAR STYLES (Centered Buttons) */
         .msg-toolbar {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #ccc;
-            position: absolute;
-            bottom: 10px;
-            left: 15px;
-            right: 15px;
+            display: flex; gap: 10px; justify-content: center; margin-top: 15px; padding-top: 10px;
+            border-top: 1px solid #ccc; position: absolute; bottom: 10px; left: 15px; right: 15px;
         }
-
         .tool-btn {
-            background-color: #ffffff;
-            border: 1px solid #adb5bd;
-            color: #495057;
-            cursor: pointer;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            background-color: #ffffff; border: 1px solid #adb5bd; color: #495057; cursor: pointer;
+            padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;
+            display: flex; align-items: center; gap: 5px; transition: all 0.2s ease;
         }
-        .tool-btn:hover {
-            background-color: #e2e6ea;
-            border-color: #6c757d;
-            transform: translateY(-1px);
-        }
+        .tool-btn:hover { background-color: #e2e6ea; transform: translateY(-1px); }
 
-        /* SUGGESTION BUTTON STYLES (CENTERED) */
-        .suggestions-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-            margin-bottom: 15px;
-            margin-top: 5px;
-            width: 100%;
-        }
+        .suggestions-container { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 15px; width: 100%; }
+        .suggestion-btn { background-color: white; border: 1px solid #007bff; color: #007bff; padding: 8px 12px; border-radius: 20px; font-size: 14px; cursor: pointer; }
 
-        .suggestion-btn {
-            background-color: white;
-            border: 1px solid #007bff;
-            color: #007bff;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-        }
-
-        .suggestion-btn:hover {
-            background-color: #007bff;
-            color: white;
-        }
-
-        /* Controls Area */
         .controls-area { display: flex; gap: 10px; align-items: center; }
         input[type="text"] { flex-grow: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 16px; }
-        #sendBtn { padding: 10px 15px; border: none; border-radius: 5px; background-color: #28a745; color: white; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
-        #sendBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
-        select { padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
-
-        /* Progress Indicator Styles (CENTERED) */
-        #progress-indicator {
-            margin-top: 5px;
-            padding: 10px;
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            display: none;
-            color: #333;
-            font-weight: bold;
-            text-align: center;
-        }
-        #progress-indicator.error { color: red; border-color: red; }
+        #sendBtn { padding: 10px 15px; border: none; border-radius: 5px; background-color: #28a745; color: white; cursor: pointer; }
+        #progress-indicator { margin-top: 5px; padding: 10px; background-color: white; border: 1px solid #ccc; border-radius: 5px; display: none; text-align: center; }
     </style>
 </head>
 <body>
     <div id="chat-container">
         <h2>Aplikace Otázky a Odpovědi 🧠</h2>
         <div id="messages"></div>
-
         <div class="controls-area">
             <select id="modelSelect">
-                <option value="gemini-2.5-flash" selected>⚡ Gemini 2.5 Flash (Rychlý)</option>
-                <option value="gemini-3-pro-preview">🧠 Gemini 3 Pro (Chytrý)</option>
+                <option value="gemini-2.5-flash" selected>⚡ Gemini 2.5 Flash</option>
+                <option value="gemini-3-pro-preview">🧠 Gemini 3 Pro</option>
             </select>
-            <input type="text" id="question" placeholder="Zadejte svou otázku zde..." onkeydown="if(event.key === 'Enter') ask()">
+            <input type="text" id="question" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
             <button id="sendBtn" onclick="ask()">Odeslat</button>
         </div>
-
-        <div id="progress-indicator">Probíhá G3 myšlení...</div>
-
+        <div id="progress-indicator">Zpracovávám...</div>
     </div>
 
     <script>
@@ -130,209 +54,118 @@
         let progressInterval = null;
         const progressIndicator = document.getElementById('progress-indicator');
 
-        const progressStages = [
-            "Dotaz Odeslán do AI 🧠...",
-            "Vkládání dotazu do vektoru 🔍...",
-            "Hledání kontextu v Neo4j databázi 💾...",
-            "Zahájení G3 myšlení 💡...",
-            "Krmení datového jednorožce 🦄...",
-            "G3 si zavazuje tkaničky 👟...",
-            "Přepočítávání daně z hlouposti 💰...",
-            "Kontrola, zda má G3 dostatek kávy ☕...",
-            "Synchronizace s vesmírnými daty ✨...",
-            "Model se hádá s databází 🤬...",
-            "Hledání odpovědi v archivních memech 🖼️...",
-            "Čekání, než nám dojde toner 🖨️...",
-            "Trénink psa na aport odpovědi 🐕...",
-            "Měření kvantového šumu 🔭...",
-            "Úplatky pro lokální server 💸...",
-            "Kontrola, zda se čas nezkroutil ⏳...",
-            "Model si dává siestu na slunci ☀️...",
-            "Ladění odpovědi v binární poezii 📜...",
-            "Filtrování konspiračních teorií 👽...",
-            "Příprava na konečnou zkoušku vesmíru 🌌...",
-            "Generování náhodných čísel pro štěstí 🍀...",
-            "Tanec pro rychlejší WiFi 💃...",
-            "Zjišťování, kdo vypnul a zapnul 🔌...",
-            "Třídění ponožek podle barev 🌈...",
-            "Psaní dopisu Nostradamovi 🔮...",
-            "Počítání, kolikrát jsem se zmýlil 🔢...",
-            "Kontrola, zda jsem to náhodou neukradl 😈..."
-        ];
-
-        const FUNNY_STAGES_START_INDEX = 4;
-        const INTERVAL_TIME = 3000;
-
+        // Functional Download Helpers
         function downloadFile(filename, text) {
             const element = document.createElement('a');
             element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
             element.setAttribute('download', filename);
-            element.style.display = 'none';
-            document.body.appendChild(element);
             element.click();
-            document.body.removeChild(element);
         }
 
-        function downloadHistory() {
-            if (chatHistory.length === 0) return;
-            const text = chatHistory.map(msg =>
-                `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`
-            ).join('\n\n');
-            downloadFile('chat_historie.txt', text);
-        }
-
-        // UPDATED: Now returns the message element so we can control it later
+        // --- FIXED: Context-Aware Message Creation ---
         function addMessage(role, content) {
             const msgs = document.getElementById('messages');
             const newMsg = document.createElement('div');
-            newMsg.classList.add('message');
-            newMsg.classList.add(role === 'user' ? 'user-msg' : 'bot-msg');
+            newMsg.className = `message ${role === 'user' ? 'user-msg' : 'bot-msg'}`;
 
             const contentDiv = document.createElement('div');
-            contentDiv.innerHTML = marked.parse(content);
+            // If the content is raw HTML (from a calculator tool), render it directly
+            if (content.trim().startsWith('<div')) {
+                contentDiv.innerHTML = content;
+            } else {
+                contentDiv.innerHTML = marked.parse(content);
+            }
             newMsg.appendChild(contentDiv);
 
             if (role === 'assistant') {
                 const toolbar = document.createElement('div');
                 toolbar.className = 'msg-toolbar';
 
-                const dlReplyBtn = document.createElement('button');
-                dlReplyBtn.className = 'tool-btn';
-                dlReplyBtn.innerHTML = '💾 Odpověď';
-                dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
+                // Standard Buttons
+                toolbar.appendChild(createBtn('💾 Odpověď', () => downloadFile('odpoved.txt', content)));
+                toolbar.appendChild(createBtn('📂 Celý chat', () => downloadHistory()));
 
-                const dlChatBtn = document.createElement('button');
-                dlChatBtn.className = 'tool-btn';
-                dlChatBtn.innerHTML = '📂 Celý chat';
-                dlChatBtn.onclick = () => downloadHistory();
+                // CONTEXT AWARENESS: Only show tools if relevant keywords exist
+                if (content.includes('Kč') || content.includes('limit')) {
+                    toolbar.appendChild(createBtn('🧮 Kalkulačka', () => askTool("calc", content)));
+                }
+                if (content.includes('e-mail') || content.includes('poradna')) {
+                    toolbar.appendChild(createBtn('✉️ E-mail', () => askTool("email", content)));
+                }
+                if (content.length > 250) {
+                    toolbar.appendChild(createBtn('🪜 Postup', () => askTool("step", content)));
+                }
 
-                toolbar.appendChild(dlReplyBtn);
-                toolbar.appendChild(dlChatBtn);
                 newMsg.appendChild(toolbar);
             }
 
             msgs.appendChild(newMsg);
-
-            // Only force scroll for user messages here.
-            // Assistant scroll is handled in ask() to prevent "button drag"
-            if (role === 'user') {
-                newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }
-
-            return newMsg; // Return element for later use
+            if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return newMsg;
         }
 
-        function addSuggestions(suggestions) {
-            if (!suggestions || suggestions.length === 0) return;
-
-            const msgs = document.getElementById('messages');
-            const container = document.createElement('div');
-            container.className = 'suggestions-container';
-
-            suggestions.forEach(text => {
-                const btn = document.createElement('button');
-                btn.className = 'suggestion-btn';
-                btn.textContent = text;
-                btn.onclick = () => ask(text);
-                container.appendChild(btn);
-            });
-
-            msgs.appendChild(container);
-            // REMOVED: container.scrollIntoView - this was causing the issue!
+        function createBtn(text, fn) {
+            const btn = document.createElement('button');
+            btn.className = 'tool-btn';
+            btn.innerHTML = text;
+            btn.onclick = fn;
+            return btn;
         }
 
-        function startProgress() {
-            progressIndicator.style.display = 'block';
-            progressIndicator.classList.remove('error');
-            let stageIndex = 0;
+        // --- FIXED: Functional Tool Trigger ---
+        async function askTool(type, context) {
+            startProgress();
+            try {
+                const response = await fetch('/.netlify/functions/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: context, history: chatHistory, type: type })
+                });
 
-            progressInterval = setInterval(() => {
-                let index = stageIndex % progressStages.length;
-                if (stageIndex < FUNNY_STAGES_START_INDEX) {
-                   progressIndicator.textContent = progressStages[index];
+                const data = await response.json();
+                stopProgress(false);
+
+                if (type === 'email') {
+                    // ACTUALLY PREPARE EMAIL: Opens the system mail client
+                    window.location.href = `mailto:poradna@ligavozickaru.cz?subject=Dotaz&body=${encodeURIComponent(data.answer)}`;
                 } else {
-                   let funnyStages = progressStages.slice(FUNNY_STAGES_START_INDEX);
-                   let randomIndex = Math.floor(Math.random() * funnyStages.length);
-                   progressIndicator.textContent = funnyStages[randomIndex];
+                    // INJECT CALCULATOR OR STEP-BY-STEP: Adds as a functional message
+                    const el = addMessage('assistant', data.answer);
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
-                stageIndex++;
-            }, INTERVAL_TIME);
-        }
-
-        function stopProgress(isError = false) {
-            clearInterval(progressInterval);
-            if (isError) {
-                progressIndicator.textContent = "CHYBA: Zpracování selhalo.";
-                progressIndicator.classList.add('error');
-            } else {
-                progressIndicator.style.display = 'none';
+            } catch (error) {
+                stopProgress(true);
             }
         }
 
         async function ask(suggestionText = null) {
             const input = document.getElementById('question');
-            const btn = document.getElementById('sendBtn');
-            const modelSelector = document.getElementById('modelSelect');
-
             const question = suggestionText || input.value.trim();
-            const selectedModel = modelSelector.value;
-
             if (!question) return;
 
             addMessage('user', question);
             input.value = '';
-            btn.disabled = true;
             chatHistory.push({ role: "user", content: question });
-
-            const oldSuggestions = document.querySelectorAll('.suggestions-container');
-            oldSuggestions.forEach(el => el.style.display = 'none');
-
             startProgress();
 
             try {
                 const response = await fetch('/.netlify/functions/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        question,
-                        history: chatHistory,
-                        model: selectedModel
-                    })
+                    body: JSON.stringify({ question, history: chatHistory, model: document.getElementById('modelSelect').value })
                 });
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    stopProgress(true);
-                    addMessage('assistant', 'CHYBA SERVERU: ' + errorData.answer);
-                    return;
-                }
-
-                stopProgress(false);
                 const data = await response.json();
-
-                // 1. Add Answer & Capture the element
-                const answerElement = addMessage('assistant', data.answer);
+                stopProgress(false);
+                addMessage('assistant', data.answer);
                 chatHistory.push({ role: "assistant", content: data.answer });
-
-                // 2. Add Buttons (silently, without scrolling)
-                if (data.suggestions) {
-                    addSuggestions(data.suggestions);
-                }
-
-                // 3. FORCE SCROLL TO TOP OF ANSWER (Overrides everything else)
-                // Small delay ensures DOM is fully rendered before scrolling
-                setTimeout(() => {
-                    answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-
             } catch (error) {
                 stopProgress(true);
-                addMessage('assistant', 'CHYBA SYSTÉMU: Zkontrolujte připojení.');
-                console.error(error);
-            } finally {
-                btn.disabled = false;
             }
         }
+
+        function startProgress() { progressIndicator.style.display = 'block'; }
+        function stopProgress(isError = false) { progressIndicator.style.display = 'none'; }
     </script>
 </body>
 </html>
