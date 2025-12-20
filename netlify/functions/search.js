@@ -1,137 +1,92 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Aplikace Otázky a Odpovědi</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background-color: #f0f2f5; }
-        #chat-container { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); min-height: 400px; display: flex; flex-direction: column; }
-        #messages { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; max-height: 500px; display: flex; flex-direction: column; scroll-behavior: smooth; }
-        .message { margin-bottom: 20px; padding: 15px; border-radius: 15px; max-width: 85%; line-height: 1.6; position: relative; }
-        .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 60px; }
-        .msg-toolbar { display: flex; gap: 8px; justify-content: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid #ccc; position: absolute; bottom: 10px; left: 15px; right: 15px; }
-        .tool-btn { background: white; border: 1px solid #adb5bd; color: #495057; cursor: pointer; padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
-        .controls-area { display: flex; gap: 10px; align-items: center; }
-        input[type="text"] { flex-grow: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 16px; }
-        #sendBtn { padding: 10px 15px; border: none; border-radius: 5px; background-color: #28a745; color: white; cursor: pointer; font-size: 16px; }
-        #progress-indicator { margin-top: 10px; text-align: center; display: none; font-weight: bold; padding: 10px; background-color: white; border: 1px solid #ccc; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <div id="chat-container">
-        <h2>Aplikace Otázky a Odpovědi 🧠</h2>
-        <div id="messages"></div>
-        <div class="controls-area">
-            <select id="modelSelect">
-                <option value="gemini-2.5-flash" selected>⚡ Gemini 2.5 Flash</option>
-                <option value="gemini-3-pro-preview">🧠 Gemini 3 Pro</option>
-            </select>
-            <input type="text" id="question" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
-            <button id="sendBtn" onclick="ask()">Odeslat</button>
-        </div>
-        <div id="progress-indicator">Zpracovávám...</div>
-    </div>
-    <script>
-        let chatHistory = [];
-        const progressIndicator = document.getElementById('progress-indicator');
+const neo4j = require("neo4j-driver");
 
-        function downloadFile(filename, text) {
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-            element.setAttribute('download', filename);
-            element.click();
-        }
+exports.handler = async (event) => {
+  const driver = neo4j.driver(process.env.NEO4J_URI, neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS));
+  const { question, history = [], model = "gemini-3-flash" } = JSON.parse(event.body);
+  const session = driver.session();
 
-        function downloadHistory() {
-            const text = chatHistory.map(msg => `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`).join('\n\n');
-            downloadFile('chat_historie.txt', text);
-        }
+  try {
+    // 1. Get embedding
+    const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
+    });
+    const embData = await embReq.json();
+    const qVector = embData.embedding.values;
 
-        function addMessage(role, content) {
-            const msgs = document.getElementById('messages');
-            const newMsg = document.createElement('div');
-            newMsg.className = `message ${role === 'user' ? 'user-msg' : 'bot-msg'}`;
-            const contentDiv = document.createElement('div');
-            if (content.trim().startsWith('<div')) {
-                contentDiv.innerHTML = content;
-                const scripts = contentDiv.querySelectorAll('script');
-                scripts.forEach(oldScript => {
-                    const newScript = document.createElement('script');
-                    newScript.textContent = oldScript.textContent;
-                    document.body.appendChild(newScript);
-                });
-            } else {
-                contentDiv.innerHTML = marked.parse(content || "");
-            }
-            newMsg.appendChild(contentDiv);
-            if (role === 'assistant') {
-                const toolbar = document.createElement('div');
-                toolbar.className = 'msg-toolbar';
-                toolbar.appendChild(createBtn('💾 Odpověď', () => downloadFile('odpoved.txt', content)));
-                toolbar.appendChild(createBtn('📂 Celý chat', () => downloadHistory()));
-                if (content.match(/Kč|limit|výpočet|příspěvek/i)) toolbar.appendChild(createBtn('🧮 Kalkulačka', () => askTool("calc", content)));
-                if (content.match(/poradna|e-mail|kontaktovat/i)) toolbar.appendChild(createBtn('✉️ E-mail', () => askTool("email", content)));
-                if (content.length > 250) toolbar.appendChild(createBtn('🪜 Postup', () => askTool("step", content)));
-                newMsg.appendChild(toolbar);
-            }
-            msgs.appendChild(newMsg);
-            if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            return newMsg;
-        }
+    // 2. Query Neo4j
+    const result = await session.run(`
+      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
+      YIELD node, score
+      MATCH (node)-[:PART_OF]->(d:Document)
+      OPTIONAL MATCH (v:EquipmentVariant)
+      WHERE any(word IN split(toLower($q), ' ') WHERE v.variant_name CONTAINS word)
+      RETURN
+        collect(DISTINCT {text: node.text, src: d.human_name, url: d.url}) AS chunks,
+        collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS specifics
+    `, { vec: qVector, q: question.toLowerCase() });
 
-        function createBtn(text, fn) {
-            const btn = document.createElement('button');
-            btn.className = 'tool-btn';
-            btn.innerHTML = text;
-            btn.onclick = fn;
-            return btn;
-        }
+    const record = result.records[0];
+    const context = [
+      ...record.get("specifics").filter(v => v.name).map(v => `TABULKA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
+      ...record.get("chunks").map(c => `ZDROJ: ${c.src} (Link: ${c.url}) | TEXT: ${c.text}`)
+    ].join("\n\n");
 
-        async function askTool(type, context) {
-            progressIndicator.style.display = 'block';
-            try {
-                const res = await fetch('/.netlify/functions/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: context, history: chatHistory, type: type })
-                });
-                const data = await res.json();
-                progressIndicator.style.display = 'none';
-                if (type === 'email') {
-                    window.location.href = `mailto:poradna@ligavozickaru.cz?subject=Dotaz&body=${encodeURIComponent(data.answer)}`;
-                } else {
-                    const el = addMessage('assistant', data.answer);
-                    chatHistory.push({ role: "assistant", content: data.answer });
-                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            } catch (error) {
-                progressIndicator.style.display = 'none';
-            }
-        }
+    // 3. Map conversation history
+    const contents = history.map(item => ({
+      role: item.role === 'user' ? 'user' : 'model',
+      parts: [{ text: item.content }]
+    }));
 
-        async function ask(suggestionText = null) {
-            const input = document.getElementById('question');
-            const question = suggestionText || input.value.trim();
-            if (!question) return;
-            addMessage('user', question);
-            input.value = '';
-            chatHistory.push({ role: "user", content: question });
-            progressIndicator.style.display = 'block';
-            try {
-                const res = await fetch('/.netlify/functions/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question, history: chatHistory, model: document.getElementById('modelSelect').value })
-                });
-                const data = await res.json();
-                progressIndicator.style.display = 'none';
-                addMessage('assistant', data.answer);
-                chatHistory.push({ role: "assistant", content: data.answer });
-            } catch (error) {
-                progressIndicator.style.display = 'none';
-            }
-        }
-    </script>
-</body>
-</html>
+    // 4. Stricter Prompt
+    const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Pomáháš handicapovaným lidem věcně a lidsky (úroveň 9. třídy ZŠ).
+
+    STRUKTURA ODPOVĚDI:
+    1. ZAČNI '## Stručně'. Vytvoř přehlednou Markdown tabulku (Položka | Fakt | Detail). Buď extrémně stručný.
+    2. NÁSLEDUJE '## Podrobné vysvětlení'. Jdi přímo k věci, žádný balast.
+    3. PENÍZE: Tisíce odděluj tečkou (10.000 Kč).
+    4. ZDROJE:
+       - Vypiš 3 nejdůležitější jako: [Název dokumentu](URL).
+       - Ostatní zdroje dej do: '<details><summary>Všechny použité zdroje</summary>...seznam odkazů...</details>'.
+    5. TLAČÍTKA: Na úplný konec napiš '///SUGGESTIONS///'.
+       - Navrhni přesně 3 krátké texty pro tlačítka (každý na nový řádek).
+       - Pokud to dává smysl, jedno tlačítko musí být 'Sestavit e-mail pro poradnu'.
+       - Pokud jde o složitý proces, jedno tlačítko bude 'Krok za krokem: Jak postupovat'.
+       - Pokud jde o peníze, jedno tlačítko bude 'Pomoci s výpočtem limitů'.
+
+    DATA: ${context}
+    OTÁZKA: ${question}`;
+
+    contents.push({ role: "user", parts: [{ text: systemPrompt }] });
+
+    // 5. Call Gemini
+    const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    const genData = await genReq.json();
+    const answer = genData.candidates[0].content.parts[0].text;
+
+    // Split logic ensuring no pipes or combined strings
+    const [mainPart, suggestionsPart] = answer.split("///SUGGESTIONS///");
+    const suggestions = suggestionsPart
+      ? suggestionsPart.split("\n").map(s => s.trim()).filter(s => s.length > 0).slice(0, 3)
+      : [];
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        answer: mainPart.trim(),
+        suggestions: suggestions
+      })
+    };
+  } catch (err) {
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+  } finally {
+    await session.close();
+    await driver.close();
+  }
+};
