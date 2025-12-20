@@ -1,3 +1,4 @@
+// FORCE_DEPLOY_ID: 2025-12-20-BUILD-5.1-FINAL-HOLISTIC
 const neo4j = require("neo4j-driver");
 
 exports.handler = async (event) => {
@@ -9,17 +10,13 @@ exports.handler = async (event) => {
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: "models/embedding-001",
-            content: { parts: [{ text: question }] }
-        })
+        body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
     });
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // We pull the human_name and url we injected into the DB
     const result = await session.run(`
-      CALL db.index.vector.queryNodes('chunk_vector_index', 5, $vec)
+      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
       MATCH (node)-[:PART_OF]->(d:Document)
       OPTIONAL MATCH (v:EquipmentVariant) 
@@ -31,21 +28,21 @@ exports.handler = async (event) => {
 
     const record = result.records[0];
     const context = [
-      ...record.get("specifics").filter(v => v.name).map(v => `PŘESNÁ DATA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
+      ...record.get("specifics").filter(v => v.name).map(v => `TABULKA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
       ...record.get("chunks").map(c => `ZDROJ: ${c.src} (URL: ${c.url}) | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    const prompt = `[VER 4.1] Jsi seniorní sociální poradce Ligy vozíčkářů. 
-    Mluvíš s lidmi s handicapem (úroveň 9. třídy ZŠ).
-    
-    STRUKTURA ODPOVĚDI (DODRŽUJ PŘESNĚ):
-    1. ZAČNI nadpisem '### STRUČNÉ SHRNUTÍ'. Pokud jsou v datech peníze nebo lhůty, dej je do přehledné Markdown tabulky. Buď extrémně stručný.
-    2. PAK nadpis '### PODROBNÉ VYSVĚTLENÍ'. Žádné fráze jako "Na základě vašich dat...". Jdi přímo k věci.
-    3. FORMÁT ČÍSEL: Používej tečku jako oddělovač tisíců (např. 10.000 Kč).
-    4. VÝPOČET: Pokud se ptají na limit příjmu u levných věcí, spočítej 8x životní minimum (8 * 4.620 Kč = 36.960 Kč).
-    5. ZDROJE: Na konci uveď '### KLÍČOVÉ ZDROJE' a max 3 odkazy ve formátu [Název dokumentu](URL).
-    6. KONTAKT: info@ligavozic.cz. Zmiň, že mohou do emailu zkopírovat tento chat.
-    7. TLAČÍTKA: Na úplný konec napiš '///SUGGESTIONS///' a pod to 3 věcné follow-up otázky na 1 řádek.
+    const prompt = `[SYSTEM VER 5.1] Jsi odborný poradce Ligy vozíčkářů. 
+    Tvým cílem je pomoci lidem s handicapem věcně a lidsky (úroveň 9. třídy ZŠ).
+
+    STRUKTURA ODPOVĚDI:
+    1. ZAČNI nadpisem '## Stručně'. Dejte fakta a peníze do Markdown tabulky. Buď extrémně stručný.
+    2. PAK nadpis '## Podrobné vysvětlení'. Jdi k věci. Žádný balast typu "odpovídám na základě dat".
+    3. PENÍZE: Odděluj tisíce tečkou (např. 10.000 Kč). 
+    4. VÝPOČET: Pokud se ptají na limit příjmu u levných věcí (<10.000 Kč), vysvětli výpočet 8 * 4.620 Kč = 36.960 Kč.
+    5. ODKAZY: Na konci dej '### Klíčové zdroje' a max 3 odkazy [Název](URL).
+    6. KONTAKT: info@ligavozic.cz.
+    7. TLAČÍTKA: Konči '///SUGGESTIONS///' a pod to 3 otázky na 1 řádek.
 
     DATA: ${context}
     OTÁZKA: ${question}`;
