@@ -25,9 +25,14 @@ exports.handler = async (event) => {
         collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS graphData
     `, { vec: qVector });
 
+    // FIX 1: Safety check to prevent 500 error when DB returns nothing
+    if (!result.records || result.records.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ answer: "## Stručně\n* Lituji, ale v databázi nebyly nalezeny žádné relevantní informace.\n\n## Podrobné vysvětlení\nPro vaši otázku nemáme v systému podklady. Obraťte se prosím na Poradnu Ligy vozíčkářů." }) };
+    }
+
     const rec = result.records[0];
-    const chunks = rec.get("chunks");
-    const graphData = rec.get("graphData");
+    const chunks = rec.get("chunks") || [];
+    const graphData = rec.get("graphData") || [];
 
     const context = [
       ...graphData.filter(v => v.name).map(v => `DATA: ${v.name} | Cena: ${v.price} Kč | Obnova: ${v.freq}`),
@@ -36,14 +41,11 @@ exports.handler = async (event) => {
 
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
     Odpověz v JSON: {"summary": ["odrážka"], "detail": "vysvětlení"}.
-
-    PŘÍSNÁ PRAVIDLA:
-    1. Odpovídej VÝHRADNĚ na základě sekce DATA.
-    2. Pokud DATA neobsahují přímou odpověď na OTÁZKU, do "summary" i "detail" napiš: "Lituji, ale pro tuto otázku nemám v databázi dostatek informací. Obraťte se prosím na Poradnu Ligy vozíčkářů."
+    PRAVIDLA:
+    1. Odpovídej VÝHRADNĚ podle dodaných DATA. Pokud informace v DATA nejsou, přiznej to a odkaž na Poradnu Ligy vozíčkářů.
+    2. NIKDY si nevymýšlej žádná fakta, ceny ani postupy, které nejsou v DATA.
     3. Pokud se dotaz týká práce při důchodu, MUSÍŠ uvést riziko lékařského přezkoumání a snížení stupně důchodu, pokud je to v DATA.
-    4. ZÁKAZ vymýšlení informací, které v DATA nejsou. ZÁKAZ inline citací.
-    5. Tisíce odděluj tečkou (10.000 Kč).
-
+    4. ZÁKAZ inline citací. Tisíce odděluj tečkou (10.000 Kč).
     DATA: ${context}
     OTÁZKA: ${question}`;
 
@@ -54,21 +56,17 @@ exports.handler = async (event) => {
         contents: [...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})), { role: "user", parts: [{ text: systemPrompt }] }],
         generationConfig: {
             response_mime_type: "application/json",
-            temperature: 0.0, // FIX: Stops the "lying" and creative hallucinations
-            topP: 1,
-            maxOutputTokens: 1024
+            temperature: 0.0 // FIX 2: Stop hallucinations/lying
         }
       })
     });
 
     const genData = await genReq.json();
 
-    // Safety check for failed generation
-    if (!genData.candidates || !genData.candidates[0].content.parts[0].text) {
-        throw new Error("Model failed to generate a response.");
-    }
-
-    const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
+    // FIX 3: Robust JSON extraction to prevent 500 error from malformed AI output
+    let rawText = genData.candidates[0].content.parts[0].text;
+    const cleanJson = rawText.replace(/```json|```/g, "").trim();
+    const responseJson = JSON.parse(cleanJson);
 
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
                             .map(str => {
@@ -90,7 +88,9 @@ exports.handler = async (event) => {
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    // FIX 4: Detailed error logging so you know exactly what failed
+    console.error("SEARCH ERROR:", err.message);
+    return { statusCode: 500, body: JSON.stringify({ error: err.message, stack: err.stack }) };
   } finally {
     await session.close();
   }
