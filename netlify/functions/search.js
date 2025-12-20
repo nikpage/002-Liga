@@ -115,20 +115,12 @@ exports.handler = async (event) => {
         `${msg.role === 'user' ? 'Uživatel' : 'Asistent'}: ${msg.content}`
     ).join("\n");
 
-    const prompt = `Jsi asistent pro osoby se zdravotním postižením. Odpovídáš PŘESNĚ na položenou otázku. Nepiš obecné informace, které nesouvisí s otázkou.
-
-PRAVIDLA:
-1. Odpověz KONKRÉTNĚ na otázku uživatele
-2. Pokud se ptá na cenu, uveď cenu
-3. Pokud se ptá na místo/lokaci, uveď konkrétní místa
-4. Pokud se ptá na postup, uveď konkrétní kroky
-5. NIKDY neříkej "informace nejsou dostupné" pokud máš relevantní data v kontextu
-6. Na konec přidej "///SUGGESTIONS///" a 3 relevantní follow-up otázky
+    const prompt = `Odpověz PŘESNĚ na otázku. Pokud máš konkrétní data (ceny, místa, jména), VŽDY je prioritně použij místo obecných informací.
 
 HISTORIE:
 ${historyBlock}
 
-DOSTUPNÁ DATA:
+DATA:
 ${context}
 
 OTÁZKA: ${question}
