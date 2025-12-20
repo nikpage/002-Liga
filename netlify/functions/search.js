@@ -6,7 +6,7 @@ exports.handler = async (event) => {
   const session = driver.session();
 
   try {
-    // 1. Get Embedding (Google API call)
+    // 1. Get Embedding (Google API)
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15,52 +15,50 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 2. Hybrid Query (Vector search + Graph Traversal)
+    // 2. Hybrid Search (Using your actual relationship labels: INCLUDES, HAS_VARIANT, APPLIES_TO)
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
       MATCH (node)-[:PART_OF]->(d:Document)
-      OPTIONAL MATCH (d)-[:MENTIONS|REGULATES]->(v:EquipmentVariant)
+      OPTIONAL MATCH (d)-[:INCLUDES|HAS_VARIANT|APPLIES_TO]->(v:EquipmentVariant)
       RETURN
         collect(DISTINCT {text: node.text, src: d.human_name, url: d.url}) AS chunks,
-        collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS specifics
+        collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS graphData
     `, { vec: qVector });
 
-    const record = result.records[0];
+    const rec = result.records[0];
     const context = [
-      ...record.get("specifics").filter(v => v.name).map(v => `TABULKA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
-      ...record.get("chunks").map(c => `ZDROJ: ${c.src} (Link: ${c.url}) | TEXT: ${c.text}`)
+      ...rec.get("graphData").filter(v => v.name).map(v => `DATA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
+      ...rec.get("chunks").map(c => `ZDROJ: ${c.src} (URL: ${c.url}) | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    const contents = history.map(item => ({
-      role: item.role === 'user' ? 'user' : 'model',
-      parts: [{ text: item.content }]
+    const contents = history.map(h => ({
+      role: h.role === 'user' ? 'user' : 'model',
+      parts: [{ text: h.content }]
     }));
 
-    // 3. FULLY RESTORED System Prompt & Formatting
-    const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš věcně a lidsky.
-    PŘÍSNÝ ZÁKAZ: Nepoužívej žádné pozdravy (Ahoj, Dobrý den) ani úvodní vatu typu "Ráda ti poradím". Začni přímo nadpisem ## Stručně.
+    // 3. System Prompt (Restored structure, 9th-grade level, tightened text)
+    const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy (jednoduše).
+    PŘÍSNÝ ZÁKAZ: Pozdravy, úvodní vata. Začni přímo ## Stručně.
 
-    STRUKTURA ODPOVĚDI:
-    1. ZAČNI '## Stručně'. Vytvoř přehlednou Markdown tabulku (Položka | Fakt | Detail).
-    2. NÁSLEDUJE '## Podrobné vysvětlení'. Jdi přímo k věci.
-    3. PENÍZE: Tisíce odděluj tečkou (10.000 Kč).
-    4. ZDROJE:
-       - Vypiš 3 nejdůležitější jako odrážky: * [Název dokumentu](URL)
-       - Ostatní zdroje dej do tohoto PŘESNÉHO formátu:
-         <details>
-         <summary>Všechny použité zdroje</summary>
+    STRUKTURA:
+    1. ## Stručně: Použij 3-5 jasných odrážek. Žádné tabulky.
+    2. ## Podrobné vysvětlení: Krátké věty. Žádná zbytečná slova.
+    3. PENÍZE: Formát 10.000 Kč.
+    4. ZDROJE: 3 hlavní jako odrážky, zbytek v <details><summary>Všechny použité zdroje</summary>...</details>.
 
-         * [Název dokumentu](URL)
-         * [Název dokumentu](URL)
-         </details>
+    DŮLEŽITÁ FAKTA:
+    - Odborný lékař (specialista) musí pomůcku vždy předepsat.
+    - Pojišťovna platí běžné věci přes poukaz.
+    - Úřad práce dává příspěvek na drahé "zvláštní pomůcky" (auto, úprava bytu).
+    - Pokud pomůcku zaplatí Úřad práce, je vaše a nemusíte ji vracet.
 
     DATA: ${context}
     OTÁZKA: ${question}`;
 
     contents.push({ role: "user", parts: [{ text: systemPrompt }] });
 
-    // 4. Call Gemini 2.5 Flash
+    // 4. Final Generation
     const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,18 +66,14 @@ exports.handler = async (event) => {
     });
 
     const genData = await genReq.json();
-    const answer = genData.candidates[0].content.parts[0].text;
-
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: answer.trim() })
+      body: JSON.stringify({ answer: genData.candidates[0].content.parts[0].text.trim() })
     };
+
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   } finally {
     await session.close();
   }
