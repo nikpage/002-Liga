@@ -14,29 +14,28 @@ exports.handler = async (event) => {
     if (!embData.embedding) throw new Error("Embedding failed");
     const qVector = embData.embedding.values;
 
-    const sessionV = driver.session();
-    const sessionG = driver.session();
+    const session = driver.session();
+    const result = await session.run(`
+      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
+      YIELD node, score
+      MATCH (node)-[:PART_OF]->(d:Document)
+      OPTIONAL MATCH (d)-->(v:EquipmentVariant)
+      RETURN collect(DISTINCT {
+        text: node.text,
+        src: d.human_name,
+        url: d.url,
+        variant: v.variant_name,
+        price: v.coverage_czk_without_dph,
+        freq: v.doba_uziti
+      }) AS chunks
+    `, { vec: qVector }).finally(() => session.close());
 
-    const [vectorResult, graphResult] = await Promise.all([
-      sessionV.run(`
-        CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
-        YIELD node, score
-        MATCH (node)-[:PART_OF]->(d:Document)
-        RETURN collect(DISTINCT {text: node.text, src: d.human_name, url: d.url}) AS chunks
-      `, { vec: qVector }).finally(() => sessionV.close()),
-      sessionG.run(`
-        MATCH (v:EquipmentVariant)
-        RETURN collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS graphData
-      `).finally(() => sessionG.close())
-    ]);
+    const chunks = result.records[0].get("chunks") || [];
 
-    const chunks = vectorResult.records[0].get("chunks") || [];
-    const graphData = graphResult.records[0].get("graphData") || [];
-
-    const context = [
-      ...graphData.filter(v => v.name).map(v => `DATA: ${v.name} | Cena: ${v.price} Kč | Obnova: ${v.freq}`),
-      ...chunks.map(c => `DOKUMENT: ${c.src} | TEXT: ${c.text}`)
-    ].join("\n\n");
+    const context = chunks.map(c =>
+      `DOKUMENT: ${c.src} | TEXT: ${c.text}` +
+      (c.variant ? ` | DATA: ${c.variant} | Cena: ${c.price} Kč | Obnova: ${c.freq}` : "")
+    ).join("\n\n");
 
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
     Odpověz v JSON: {"summary": ["odrážka"], "detail": "vysvětlení"}.
@@ -65,8 +64,8 @@ exports.handler = async (event) => {
     let responseJson;
     try {
       responseJson = JSON.parse(rawText.replace(/```json|```/g, "").trim());
-    } catch (parseError) {
-      throw new Error("Chyba při parsování odpovědi AI: " + parseError.message);
+    } catch (e) {
+      throw new Error("AI JSON Parse Error: " + e.message);
     }
 
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
