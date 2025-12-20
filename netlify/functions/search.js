@@ -9,7 +9,7 @@ exports.handler = async (event) => {
   try {
     const requestLogic = async () => {
       const body = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : event.body;
-      const { question, history = [], model = "gemini-2.0-flash" } = JSON.parse(body || "{}");
+      const { question, history = [], model = "gemini-2.5-flash-lite" } = JSON.parse(body || "{}");
 
       if (!question) throw new Error("Missing question");
 
