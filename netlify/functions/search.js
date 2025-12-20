@@ -6,7 +6,7 @@ exports.handler = async (event) => {
   const session = driver.session();
 
   try {
-    // 1. Get Embedding
+    // 1. Vector Search
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 2. Hybrid Query - Strict filtering for actual sources only
+    // 2. Hybrid Query (Strict Filtering for Human Names and URLs)
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
@@ -33,17 +33,18 @@ exports.handler = async (event) => {
 
     const context = [
       ...graphData.filter(v => v.name).map(v => `DATA: ${v.name} | Cena: ${v.price} Kč | Obnova: ${v.freq}`),
-      ...chunks.map(c => `SOURCE_ID ${c.id}: ${c.src} | TEXT: ${c.text}`)
+      ...chunks.map(c => `ID ${c.id}: ${c.src} | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    // 3. System Prompt - 9th Grade & Strict Citation
-    const systemPrompt = `Jsi seniorní poradce. Piš pro žáka 9. třídy.
-    Odpověz v JSON: {"summary": ["odrážka"], "detail": "Text"}.
-    Pravidla:
-    - Používej jen dodaná DATA. Nevymýšlej si.
-    - Citace musí být VŽDY na konci věty/odrážky.
-    - Tisíce odděluj tečkou (10.000 Kč).
-    - Pojišťovna (poukaz), Úřad práce (příspěvek na drahé věci).
+    // 3. System Prompt (Restoring Czech Output for Client)
+    const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
+    Odpověz v JSON: {"summary": ["odrážka"], "detail": "Text"}
+
+    PRAVIDLA:
+    - Používej pouze dodaná DATA.
+    - Citace musí být na KONCI věty nebo odrážky. Nikdy na začátku.
+    - Tisíce odděluj tečkou (10.000 Kč). Žádné pozdravy.
+    - Pojišťovna (poukaz) hradí běžné věci. Úřad práce (příspěvek) hradí drahé věci.
 
     DATA: ${context}
     OTÁZKA: ${question}`;
@@ -52,7 +53,7 @@ exports.handler = async (event) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: systemPrompt }] }],
+        contents: [...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})), { role: "user", parts: [{ text: systemPrompt }] }],
         generationConfig: { response_mime_type: "application/json" }
       })
     });
@@ -60,10 +61,14 @@ exports.handler = async (event) => {
     const genData = await genReq.json();
     const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
 
-    // 4. Formatting - Only 3 main sources, full list in details
-    const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
+    // 4. Source Logic (Strictly evidence-based)
+    const responseText = JSON.stringify(responseJson);
+    const citedIds = [...responseText.matchAll(/\/g)].map(m => m[1]);
+    const citedChunks = chunks.filter(c => citedIds.includes(c.id.toString()));
+    const uniqueDocs = Array.from(new Set(citedChunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
                             .map(str => JSON.parse(str));
 
+    // 5. Final Output Assembly (Formatting outside the AI)
     const finalAnswer = [
       `## Stručně`,
       responseJson.summary.map(s => `* ${s}`).join('\n'),
