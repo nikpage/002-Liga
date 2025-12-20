@@ -1,4 +1,4 @@
-// BUILD_VER_5.2_FIXED_PATH
+// BUILD_FINGERPRINT: 20251220-V5.3-STABLE-MANUAL
 const neo4j = require("neo4j-driver");
 
 exports.handler = async (event) => {
@@ -12,15 +12,16 @@ exports.handler = async (event) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
     });
-    const { embedding: { values: qVector } } = await embReq.json();
+    const embData = await embReq.json();
+    const qVector = embData.embedding.values;
 
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
       MATCH (node)-[:PART_OF]->(d:Document)
-      OPTIONAL MATCH (v:EquipmentVariant) 
+      OPTIONAL MATCH (v:EquipmentVariant)
       WHERE any(word IN split(toLower($q), ' ') WHERE v.variant_name CONTAINS word)
-      RETURN 
+      RETURN
         collect(DISTINCT {text: node.text, src: d.human_name, url: d.url}) AS chunks,
         collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS specifics
     `, { vec: qVector, q: question.toLowerCase() });
@@ -28,18 +29,19 @@ exports.handler = async (event) => {
     const record = result.records[0];
     const context = [
       ...record.get("specifics").filter(v => v.name).map(v => `TABULKA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
-      ...record.get("chunks").map(c => `ZDROJ: ${c.src} (URL: ${c.url}) | TEXT: ${c.text}`)
+      ...record.get("chunks").map(c => `ZDROJ: ${c.src} (Link: ${c.url}) | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    const prompt = `[V 5.2] Jsi odborný poradce Ligy vozíčkářů. Mluv srozumitelně (CZ 9. třída).
+    const prompt = `Jsi seniorní poradce Ligy vozíčkářů. Pomáháš handicapovaným lidem věcně a lidsky (úroveň 9. třídy ZŠ).
 
-    1. ZAČNI '## Stručně'. Dej fakta a peníze do Markdown tabulky. 
-    2. PAK '## Podrobné vysvětlení'. Jdi k věci, žádný balast.
-    3. ČÍSLA: Tisíce odděluj tečkou (10.000 Kč).
-    4. VÝPOČET: Pokud je cena pod 10.000 Kč, vysvětli limit 8x živ. minimum (8 * 4.620 Kč = 36.960 Kč).
-    5. ZDROJE: Na konci max 3 nejdůležitější odkazy [Název dokumentu](URL).
-    6. KONTAKT: info@ligavozic.cz.
-    7. TLAČÍTKA: Na konec napiš '///SUGGESTIONS///' a pod to 3 otázky na 1 řádek.
+    STRUKTURA ODPOVĚDI:
+    1. ZAČNI nadpisem '## Stručně'. Dej klíčová fakta a peníze do Markdown tabulky. Buď extrémně stručný.
+    2. PAK nadpis '## Podrobné vysvětlení'. Jdi přímo k věci, žádný balast typu "Na základě dat...".
+    3. PENÍZE: Odděluj tisíce tečkou (např. 10.000 Kč).
+    4. VÝPOČET: Pokud se ptají na limit příjmu u levných věcí (<10.000 Kč), vysvětli výpočet 8 * 4.620 Kč = 36.960 Kč.
+    5. ODKAZY: Na konci vypiš max 3 nejdůležitější odkazy jako [Název dokumentu](URL).
+    6. KONTAKT: info@ligavozic.cz. Zmiň, že mohou do emailu zkopírovat tento chat.
+    7. TLAČÍTKA: Na úplný konec napiš '///SUGGESTIONS///' a pod to 3 krátké otázky na 1 řádek.
 
     DATA: ${context}
     OTÁZKA: ${question}`;
@@ -51,14 +53,14 @@ exports.handler = async (event) => {
     });
     const genData = await genReq.json();
     let answer = genData.candidates[0].content.parts[0].text;
-    
+
     const parts = answer.split("///SUGGESTIONS///");
-    return { 
-      statusCode: 200, 
-      body: JSON.stringify({ 
-        answer: parts[0].trim(), 
-        suggestions: parts[1] ? parts[1].split("\n").filter(s => s.trim()).slice(0,3) : [] 
-      }) 
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        answer: parts[0].trim(),
+        suggestions: parts[1] ? parts[1].split("\n").filter(s => s.trim()).slice(0,3) : []
+      })
     };
   } finally {
     await session.close();
