@@ -62,7 +62,12 @@ exports.handler = async (event) => {
     if (!genData.candidates || !genData.candidates[0].content.parts[0].text) throw new Error("AI Generation failed");
 
     let rawText = genData.candidates[0].content.parts[0].text;
-    const responseJson = JSON.parse(rawText.replace(/```json|```/g, "").trim());
+    let responseJson;
+    try {
+      responseJson = JSON.parse(rawText.replace(/```json|```/g, "").trim());
+    } catch (parseError) {
+      throw new Error("Chyba při parsování odpovědi AI: " + parseError.message);
+    }
 
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
                             .map(str => {
@@ -84,6 +89,10 @@ exports.handler = async (event) => {
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: err.message })
+    };
   }
 };
