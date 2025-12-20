@@ -35,8 +35,12 @@ exports.handler = async (event) => {
     ].join("\n\n");
 
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
-    Odpověz v JSON: {"summary": ["odrážka 1", "odrážka 2"], "detail": "Čistý text bez citací."}
-    RULES: No inline citations or SOURCE_IDs. Use 10.000 Kč format.
+    Odpověz v JSON: {"summary": ["odrážka"], "detail": "vysvětlení"}.
+    PRAVIDLA:
+    1. VŽDY a POUZE podle dodaných DATA. Nikdy nelži.
+    2. Pokud se dotaz týká práce při důchodu, MUSÍŠ uvést riziko lékařského přezkoumání a snížení stupně důchodu, pokud je to v DATA.
+    3. ZÁKAZ inline citací, SOURCE_ID nebo názvů zdrojů v textu.
+    4. Tisíce odděluj tečkou (10.000 Kč).
     DATA: ${context}
     OTÁZKA: ${question}`;
 
@@ -55,8 +59,9 @@ exports.handler = async (event) => {
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
                             .map(str => {
                               const d = JSON.parse(str);
-                              let clean = d.src.replace(/-/g, ' ');
-                              return { src: clean.charAt(0).toUpperCase() + clean.slice(1), url: d.url };
+                              let cleanTitle = d.src.replace(/-/g, ' ');
+                              cleanTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
+                              return { src: cleanTitle, url: d.url };
                             });
 
     const finalAnswer = [
@@ -70,7 +75,6 @@ exports.handler = async (event) => {
     ].join('\n');
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
-
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   } finally {
