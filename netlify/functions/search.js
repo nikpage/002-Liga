@@ -36,24 +36,38 @@ exports.handler = async (event) => {
 
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
     Odpověz v JSON: {"summary": ["odrážka"], "detail": "vysvětlení"}.
-    PRAVIDLA:
-    1. VŽDY a POUZE podle dodaných DATA. Nikdy nelži.
-    2. Pokud se dotaz týká práce při důchodu, MUSÍŠ uvést riziko lékařského přezkoumání a snížení stupně důchodu, pokud je to v DATA.
-    3. ZÁKAZ inline citací, SOURCE_ID nebo názvů zdrojů v textu.
-    4. Tisíce odděluj tečkou (10.000 Kč).
+
+    PŘÍSNÁ PRAVIDLA:
+    1. Odpovídej VÝHRADNĚ na základě sekce DATA.
+    2. Pokud DATA neobsahují přímou odpověď na OTÁZKU, do "summary" i "detail" napiš: "Lituji, ale pro tuto otázku nemám v databázi dostatek informací. Obraťte se prosím na Poradnu Ligy vozíčkářů."
+    3. Pokud se dotaz týká práce při důchodu, MUSÍŠ uvést riziko lékařského přezkoumání a snížení stupně důchodu, pokud je to v DATA.
+    4. ZÁKAZ vymýšlení informací, které v DATA nejsou. ZÁKAZ inline citací.
+    5. Tisíce odděluj tečkou (10.000 Kč).
+
     DATA: ${context}
     OTÁZKA: ${question}`;
 
-    const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
+    const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})), { role: "user", parts: [{ text: systemPrompt }] }],
-        generationConfig: { response_mime_type: "application/json" }
+        generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.0, // FIX: Stops the "lying" and creative hallucinations
+            topP: 1,
+            maxOutputTokens: 1024
+        }
       })
     });
 
     const genData = await genReq.json();
+
+    // Safety check for failed generation
+    if (!genData.candidates || !genData.candidates[0].content.parts[0].text) {
+        throw new Error("Model failed to generate a response.");
+    }
+
     const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
 
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
