@@ -25,14 +25,18 @@ exports.handler = async (event) => {
         collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS graphData
     `, { vec: qVector });
 
-    // FIX 1: Safety check to prevent 500 error when DB returns nothing
-    if (!result.records || result.records.length === 0) {
-        return { statusCode: 200, body: JSON.stringify({ answer: "## Stručně\n* Lituji, ale v databázi nebyly nalezeny žádné relevantní informace.\n\n## Podrobné vysvětlení\nPro vaši otázku nemáme v systému podklady. Obraťte se prosím na Poradnu Ligy vozíčkářů." }) };
+    const records = result.records;
+    if (!records || records.length === 0 || records[0].get("chunks").length === 0) {
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: "## Stručně\n* Lituji, ale v databázi nebyly nalezeny žádné relevantní informace.\n\n## Podrobné vysvětlení\nPro vaši otázku nemáme v systému podklady. Obraťte se prosím na Poradnu Ligy vozíčkářů." })
+      };
     }
 
-    const rec = result.records[0];
-    const chunks = rec.get("chunks") || [];
-    const graphData = rec.get("graphData") || [];
+    const rec = records[0];
+    const chunks = rec.get("chunks");
+    const graphData = rec.get("graphData");
 
     const context = [
       ...graphData.filter(v => v.name).map(v => `DATA: ${v.name} | Cena: ${v.price} Kč | Obnova: ${v.freq}`),
@@ -41,11 +45,14 @@ exports.handler = async (event) => {
 
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
     Odpověz v JSON: {"summary": ["odrážka"], "detail": "vysvětlení"}.
-    PRAVIDLA:
-    1. Odpovídej VÝHRADNĚ podle dodaných DATA. Pokud informace v DATA nejsou, přiznej to a odkaž na Poradnu Ligy vozíčkářů.
-    2. NIKDY si nevymýšlej žádná fakta, ceny ani postupy, které nejsou v DATA.
-    3. Pokud se dotaz týká práce při důchodu, MUSÍŠ uvést riziko lékařského přezkoumání a snížení stupně důchodu, pokud je to v DATA.
-    4. ZÁKAZ inline citací. Tisíce odděluj tečkou (10.000 Kč).
+
+    PŘÍSNÁ PRAVIDLA PRO ÚPLNOST A PRAVDU:
+    1. ZPRACOVÁNÍ DATA: Musíš projít veškerá poskytnutá DATA a DOKUMENTY. Nic nevynechávej. Pokud je v DATA uvedena cena, termín nebo podmínka, MUSÍ být v detailu.
+    2. ZÁKAZ STRUČNOSTI NA ÚKOR OBSAHU: Pokud jsou v DATA 3 varianty vozíku, popiš všechny 3.
+    3. FALLBACK: Pokud v DATA není odpověď, napiš: "Lituji, ale pro tuto otázku nemám v databázi dostatek informací. Obraťte se na Poradnu Ligy vozíčkářů."
+    4. ŽÁDNÉ VYMÝŠLENÍ: Nikdy nedoplňuj informace z vlastní hlavy. Použij jen to, co je v sekci DATA.
+    5. FORMÁT: Tisíce odděluj tečkou (10.000 Kč). ZÁKAZ inline citací.
+
     DATA: ${context}
     OTÁZKA: ${question}`;
 
@@ -54,17 +61,12 @@ exports.handler = async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})), { role: "user", parts: [{ text: systemPrompt }] }],
-        generationConfig: {
-            response_mime_type: "application/json",
-            temperature: 0.0 // FIX 2: Stop hallucinations/lying
-        }
+        generationConfig: { response_mime_type: "application/json", temperature: 0.0 }
       })
     });
 
     const genData = await genReq.json();
-
-    // FIX 3: Robust JSON extraction to prevent 500 error from malformed AI output
-    let rawText = genData.candidates[0].content.parts[0].text;
+    const rawText = genData.candidates[0].content.parts[0].text;
     const cleanJson = rawText.replace(/```json|```/g, "").trim();
     const responseJson = JSON.parse(cleanJson);
 
@@ -88,9 +90,7 @@ exports.handler = async (event) => {
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
   } catch (err) {
-    // FIX 4: Detailed error logging so you know exactly what failed
-    console.error("SEARCH ERROR:", err.message);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message, stack: err.stack }) };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   } finally {
     await session.close();
   }
