@@ -6,7 +6,7 @@ exports.handler = async (event) => {
   const session = driver.session();
 
   try {
-    // 1. Vector Search for relevance
+    // 1. Vector Search
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 2. Hybrid Query (Strictly filtering for actual human names and URLs)
+    // 2. Hybrid Query (Strict filter for valid names)
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
@@ -36,15 +36,15 @@ exports.handler = async (event) => {
       ...chunks.map(c => `DOKUMENT: ${c.src} | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    // 3. System Prompt (9th Grade Level - Content Only, NO INLINE CITATIONS)
+    // 3. System Prompt (NO CITATIONS, NO IDs IN TEXT)
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
-    Odpověz v JSON: {"summary": ["věcná odrážka"], "detail": "Jasné vysvětlení bez jakýchkoliv citací nebo zdrojů v textu."}
+    Odpověz v JSON: {"summary": ["odrážka 1", "odrážka 2"], "detail": "Čistý text bez jakýchkoliv citací, ID nebo odkazů."}
 
     PRAVIDLA:
-    - Používej pouze dodaná DATA. Nevymýšlej si.
-    - ZÁKAZ: Do textu nepiš žádné zdroje, ID ani citace typu.
-    - Tisíce odděluj tečkou (10.000 Kč). Žádné pozdravy.
-    - Pojišťovna (poukaz) vs Úřad práce (příspěvek na drahé věci).
+    - ZÁKAZ: Do textu (summary i detail) nikdy nepiš, SOURCE_ID nebo názvy zdrojů.
+    - Používej pouze dodaná DATA.
+    - Peníze: 10.000 Kč.
+    - Odborný lékař předepisuje, Pojišťovna hradí poukaz, Úřad práce dává příspěvek.
 
     DATA: ${context}
     OTÁZKA: ${question}`;
@@ -61,11 +61,15 @@ exports.handler = async (event) => {
     const genData = await genReq.json();
     const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
 
-    // 4. Source Assembly (Using actual titles and links from the database)
+    // 4. Formatting Logic (Formatting and Capitalization fix)
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
-                            .map(str => JSON.parse(str));
+                            .map(str => {
+                               const d = JSON.parse(str);
+                               // Capitalize first letter and fix common slugs
+                               const cleanName = d.src.charAt(0).toUpperCase() + d.src.slice(1);
+                               return { src: cleanName, url: d.url };
+                            });
 
-    // 5. Hard-coded Layout (Formatting Outside the AI)
     const finalAnswer = [
       `## Stručně`,
       responseJson.summary.map(s => `* ${s}`).join('\n'),
@@ -76,19 +80,8 @@ exports.handler = async (event) => {
       `\n<details><summary>Všechny použité zdroje</summary>\n\n${uniqueDocs.map(d => `* [${d.src}](${d.url})`).join('\n')}\n</details>`
     ].join('\n');
 
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: finalAnswer })
-    };
+    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
 
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: err.message })
-    };
-  } finally {
-    await session.close();
-  }
-};
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+  } finally
