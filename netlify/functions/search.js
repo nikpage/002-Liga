@@ -1,4 +1,3 @@
-// BUILD_FINGERPRINT: 20251220-V5.3-STABLE-MANUAL
 const neo4j = require("neo4j-driver");
 
 exports.handler = async (event) => {
@@ -46,7 +45,7 @@ exports.handler = async (event) => {
     DATA: ${context}
     OTÁZKA: ${question}`;
 
-    const genReq = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/\${model}:generateContent?key=\${process.env.GOOGLE_API_KEY}\`, {
+    const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
