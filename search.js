@@ -11,49 +11,42 @@ exports.handler = async (event) => {
 
   const session = driver.session();
   try {
-    // 1. Get Embedding
+    // 1. NEUTRAL VECTOR SEARCH: Find the best 5 chunks on ANY topic
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
     });
-    const embData = await embReq.json();
-    const qVector = embData.embedding.values;
+    const { embedding: { values: qVector } } = await embReq.json();
 
-    // 2. SEARCH: Get specific equipment + the best text chunks
+    // 2. HOLISTIC GRAPH TRAVERSAL: Get the text + the Document Source + related entities
     const result = await session.run(`
-      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
+      CALL db.index.vector.queryNodes('chunk_vector_index', 5, $vec)
       YIELD node, score
-      OPTIONAL MATCH (node)-[:PART_OF]->(d:Document)
-      WITH node, score, d
-      ORDER BY score DESC
-      
-      // Pull specific equipment info if it matches terms in the question
-      OPTIONAL MATCH (v:EquipmentVariant)
-      WHERE any(word IN split(toLower($q), ' ') WHERE v.variant_name CONTAINS word)
-      
+      MATCH (node)-[:PART_OF]->(d:Document)
+      OPTIONAL MATCH (node)-[:IS_ASSOCIATED_WITH|CONCERNS|APPLIES_TO]-(related)
       RETURN 
-        collect(DISTINCT {text: node.text, src: coalesce(node.source_name, d.name, 'Neznámý zdroj')})[0..3] AS text_chunks,
-        collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, frequency: v.doba_uziti})[0..3] AS equipment
-    `, { vec: qVector, q: question.toLowerCase() });
+        node.text AS text, 
+        d.name AS source, 
+        collect(DISTINCT coalesce(related.name, labels(related)[0])) AS related_info
+    `, { vec: qVector });
 
-    const record = result.records[0];
-    const textData = record.get("text_chunks");
-    const equipData = record.get("equipment");
+    const context = result.records.map(r => {
+        return `[ZDROJ: ${r.get("source")}]\nTEXT: ${r.get("text")}\nSOUVISLOSTI: ${r.get("related_info").join(", ")}`;
+    }).join("\n\n---\n\n");
 
-    const context = [
-      ...equipData.filter(e => e.name).map(e => `TABULKOVÉ DATA: Pomůcka ${e.name}, Úhrada: ${e.price} Kč, Častost: ${e.frequency}`),
-      ...textData.map(t => `DOKUMENT (${t.src}): ${t.text}`)
-    ].join("\n\n");
+    // 3. CASEWORKER REASONING PROMPT
+    const prompt = `Jsi vysoce kvalifikovaný sociální poradce pro českou charitu pomáhající lidem s handicapem. 
+TVŮJ CÍL: Poskytnout lidskou, přesnou a specifickou odpověď založenou na dodaných datech.
 
-    const prompt = `Jsi odborný poradce charity pro handicapované. 
-PRAVIDLA ODPOVĚDI:
-- Pokud se ptají na konkrétní věc (podsedák, vozík), začni hned cenou a frekvencí.
-- Podsedák na vozík je LEVNÁ pomůcka (obvykle pod 10 000 Kč). U takových věcí ignoruj limity 800 000 Kč a soustřeď se na pravidla pro drobné pomůcky.
-- Nepoužívej interní ID dokumentů. Cituj "Zdroj: [název dokumentu]".
-- Vždy nabídni kontakt na lidský helpdesk.
+POKYNY PRO UVAŽOVÁNÍ:
+- Pokud se uživatel ptá na konkrétní věc (např. podsedák), a ty vidíš, že cena je pod 10 000 Kč, uplatni pravidla pro drobné pomůcky (opakované žádosti, limit 8x životní minimum)[cite: 4, 10].
+- Pokud je pomůcka drahá, zmiň souhrnný limit 800 000 Kč za 5 let.
+- Pokud odpověď není v datech explicitně, INFERUJ ji (např. "Podsedák je levná věc, takže se na něj pravděpodobně vztahují tato pravidla..."). Vždy uveď, že jde o tvůj úsudek a proč si to myslíš.
+- NIKDY nepoužívej interní kódy (chunk_1). Používej názvy dokumentů (Příručka pro zaměstnanost).
+- VŽDY zakonči odpověď doporučením kontaktovat lidský helpdesk pro finální ověření.
 
-DATA Z DATABÁZE:
+KONTEXT Z DATABÁZE:
 ${context}
 
 OTÁZKA: ${question}`;
