@@ -1,6 +1,6 @@
 const neo4j = require("neo4j-driver");
 
-/* ---------- INTENT TRIAGE (FAST, DETERMINISTIC) ---------- */
+/* ---------- FAST INTENT CLASSIFIER ---------- */
 async function classifyIntent(question) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GOOGLE_API_KEY}`,
@@ -11,25 +11,13 @@ async function classifyIntent(question) {
         generationConfig: { temperature: 0, maxOutputTokens: 5 },
         contents: [{
           role: "user",
-          parts: [{
-            text: `
-Classify the question into ONE category:
-STRUCTURED = who/where/relationships/prescription/providers
-TEXT = explanation/definition/how it works
-MIXED = both
-UNCLEAR = cannot determine
-
-Reply with ONE WORD only.
-Question: ${question}
-            `.trim()
-          }]
+          parts: [{ text: `STRUCTURED / TEXT / MIXED / UNCLEAR\nQuestion: ${question}` }]
         }]
       })
     }
   );
-
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "UNCLEAR";
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "TEXT";
 }
 
 /* ---------- HANDLER ---------- */
@@ -38,10 +26,7 @@ exports.handler = async (event) => {
     JSON.parse(event.body || "{}");
 
   if (!question) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Missing question" })
-    };
+    return { statusCode: 400, body: JSON.stringify({ error: "Missing question" }) };
   }
 
   const intent = await classifyIntent(question);
@@ -53,106 +38,74 @@ exports.handler = async (event) => {
   const session = driver.session();
 
   try {
-    let context = "";
+    /* ---------- ALWAYS VECTOR (FUZZY INPUT RESOLUTION) ---------- */
+    const embReq = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/embedding-001",
+          content: { parts: [{ text: question }] }
+        })
+      }
+    );
+    const embData = await embReq.json();
+    const vec = embData.embedding.values;
 
-    /* ---------- STRUCTURED ONLY (NO VECTORS) ---------- */
-    if (intent === "STRUCTURED") {
-      const result = await session.run(
+    const vecResult = await session.run(
+      `
+      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
+      YIELD node, score
+      MATCH (node)-[:PART_OF]->(d:Document)
+      RETURN
+        collect(DISTINCT node.text) AS texts,
+        collect(DISTINCT d.human_name) AS sources,
+        collect(DISTINCT d.url) AS urls
+      `,
+      { vec }
+    );
+
+    const record = vecResult.records[0];
+    let contextParts = [];
+
+    if (record) {
+      record.get("texts").forEach(t => contextParts.push(t));
+      record.get("sources").forEach((s, i) => {
+        const url = record.get("urls")[i];
+        contextParts.push(`ZDROJ: ${s}${url ? ` (${url})` : ""}`);
+      });
+    }
+
+    /* ---------- GRAPH ONLY WHEN USEFUL ---------- */
+    if (intent === "STRUCTURED" || intent === "MIXED") {
+      const graphResult = await session.run(
         `
         MATCH (e:Equipment)-[r]->(o)
-        WHERE toLower(e.name) CONTAINS toLower($q)
-        RETURN e.name AS equipment, type(r) AS rel, labels(o) AS targetLabels, o.name AS target
+        WHERE any(word IN split(toLower($q),' ') WHERE toLower(e.name) CONTAINS word)
+        RETURN DISTINCT e.name AS equipment, type(r) AS rel, o.name AS target
         LIMIT 20
         `,
         { q: question }
       );
 
-      context = result.records
-        .map(r =>
-          `${r.get("equipment")} — ${r.get("rel")} → ${r.get("target")} (${r.get("targetLabels").join(", ")})`
-        )
-        .join("\n");
+      graphResult.records.forEach(r => {
+        contextParts.push(
+          `${r.get("equipment")} — ${r.get("rel")} → ${r.get("target")}`
+        );
+      });
     }
 
-    /* ---------- TEXT ONLY (VECTORS ONLY) ---------- */
-    if (intent === "TEXT") {
-      const embReq = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "models/embedding-001",
-            content: { parts: [{ text: question }] }
-          })
-        }
-      );
-      const embData = await embReq.json();
-      const qVector = embData.embedding.values;
-
-      const result = await session.run(
-        `
-        CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
-        YIELD node, score
-        MATCH (node)-[:PART_OF]->(d:Document)
-        RETURN node.text AS text, d.human_name AS src, d.url AS url
-        `,
-        { vec: qVector }
-      );
-
-      context = result.records
-        .map(r => `ZDROJ: ${r.get("src")} (${r.get("url")})\n${r.get("text")}`)
-        .join("\n\n");
-    }
-
-    /* ---------- MIXED (VECTORS → NARROW GRAPH) ---------- */
-    if (intent === "MIXED") {
-      const embReq = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "models/embedding-001",
-            content: { parts: [{ text: question }] }
-          })
-        }
-      );
-      const embData = await embReq.json();
-      const qVector = embData.embedding.values;
-
-      const result = await session.run(
-        `
-        CALL db.index.vector.queryNodes('chunk_vector_index', 4, $vec)
-        YIELD node, score
-        MATCH (node)-[:PART_OF]->(d:Document)
-        OPTIONAL MATCH (e:Equipment)-[:HAS_VARIANT]->(v:EquipmentVariant)
-        WHERE toLower(v.variant_name) CONTAINS toLower($q)
-        RETURN
-          collect(DISTINCT node.text) AS texts,
-          collect(DISTINCT v.variant_name) AS variants
-        `,
-        { vec: qVector, q: question }
-      );
-
-      const record = result.records[0];
-      context = [
-        ...(record.get("variants") || []).map(v => `VARIANTA: ${v}`),
-        ...(record.get("texts") || [])
-      ].join("\n\n");
-    }
-
-    /* ---------- UNCLEAR ---------- */
-    if (intent === "UNCLEAR") {
+    if (contextParts.length === 0) {
       return {
         statusCode: 200,
         body: JSON.stringify({
-          answer: "Dotazu nerozumím. Zkuste ho prosím napsat jinak nebo doplnit."
+          answer: "Dotazu nerozumím. Zkuste jej prosím upřesnit."
         })
       };
     }
 
-    /* ---------- FINAL ANSWER (SAME MODEL) ---------- */
+    /* ---------- FINAL ANSWER ---------- */
     const contents = history.map(h => ({
       role: h.role === "user" ? "user" : "model",
       parts: [{ text: h.content }]
@@ -161,13 +114,7 @@ exports.handler = async (event) => {
     contents.push({
       role: "user",
       parts: [{
-        text: `
-DATA:
-${context}
-
-OTÁZKA:
-${question}
-        `.trim()
+        text: `DATA:\n${contextParts.join("\n\n")}\n\nOTÁZKA:\n${question}`
       }]
     });
 
@@ -181,13 +128,15 @@ ${question}
     );
 
     const genData = await genReq.json();
-    const answer = genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const answer =
+      genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: answer.trim(), intent })
+      body: JSON.stringify({ answer: answer.trim() })
     };
+
   } catch (err) {
     return {
       statusCode: 500,
