@@ -6,7 +6,6 @@ exports.handler = async (event) => {
   const session = driver.session();
 
   try {
-    // 1. Vector Search
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15,7 +14,6 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 2. Hybrid Query (Strict filter for valid names)
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
@@ -36,16 +34,9 @@ exports.handler = async (event) => {
       ...chunks.map(c => `DOKUMENT: ${c.src} | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    // 3. System Prompt (NO CITATIONS, NO IDs IN TEXT)
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
-    Odpověz v JSON: {"summary": ["odrážka 1", "odrážka 2"], "detail": "Čistý text bez jakýchkoliv citací, ID nebo odkazů."}
-
-    PRAVIDLA:
-    - ZÁKAZ: Do textu (summary i detail) nikdy nepiš, SOURCE_ID nebo názvy zdrojů.
-    - Používej pouze dodaná DATA.
-    - Peníze: 10.000 Kč.
-    - Odborný lékař předepisuje, Pojišťovna hradí poukaz, Úřad práce dává příspěvek.
-
+    Odpověz v JSON: {"summary": ["odrážka 1", "odrážka 2"], "detail": "Čistý text bez citací."}
+    RULES: No inline citations or SOURCE_IDs. Use 10.000 Kč format.
     DATA: ${context}
     OTÁZKA: ${question}`;
 
@@ -61,13 +52,11 @@ exports.handler = async (event) => {
     const genData = await genReq.json();
     const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
 
-    // 4. Formatting Logic (Formatting and Capitalization fix)
     const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
                             .map(str => {
-                               const d = JSON.parse(str);
-                               // Capitalize first letter and fix common slugs
-                               const cleanName = d.src.charAt(0).toUpperCase() + d.src.slice(1);
-                               return { src: cleanName, url: d.url };
+                              const d = JSON.parse(str);
+                              let clean = d.src.replace(/-/g, ' ');
+                              return { src: clean.charAt(0).toUpperCase() + clean.slice(1), url: d.url };
                             });
 
     const finalAnswer = [
@@ -84,4 +73,7 @@ exports.handler = async (event) => {
 
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
-  } finally
+  } finally {
+    await session.close();
+  }
+};
