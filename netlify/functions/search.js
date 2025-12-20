@@ -36,16 +36,29 @@ exports.handler = async (event) => {
       ORDER BY score DESC
     `, { vec: qVector });
 
+    const equipmentResult = await session.run(`
+      MATCH (e:Equipment)-[:HAS_VARIANT]->(v:EquipmentVariant)
+      OPTIONAL MATCH (v)-[:CAN_BE_PRESCRIBED_BY]->(d:DoctorSpecialization)
+      WITH v, e, collect(DISTINCT d.name) AS doctors
+      RETURN e.name + ' - ' + v.variant_name AS equipment,
+             v.coverage_czk_without_dph AS price,
+             v.doba_uziti AS doba_uziti,
+             v.circulation AS circulation,
+             doctors,
+             'equipment-' + v.id AS source
+      LIMIT 10
+    `);
+
     const rentalResult = await session.run(`
       MATCH (r:Rental)
       RETURN r.name + ' (' + r.city + ')' AS text, r.source AS source
-      LIMIT 5
+      LIMIT 10
     `);
 
     const orgResult = await session.run(`
       MATCH (o:Organization)
       RETURN o.name + ' (' + o.location + ')' AS text, o.source AS source
-      LIMIT 5
+      LIMIT 10
     `);
 
     const contextParts = [];
@@ -55,16 +68,34 @@ exports.handler = async (event) => {
         const text = r.get("text");
         const source = r.get("source");
         if (text && source) {
-            contextParts.push(`ZDROJ: "${source}"\nTEXT: ${text}`);
+            contextParts.push(text);
             uniqueSources.add(source);
         }
+    });
+
+    equipmentResult.records.forEach(r => {
+        const equipment = r.get("equipment");
+        const price = r.get("price");
+        const doba = r.get("doba_uziti");
+        const circulation = r.get("circulation");
+        const doctors = r.get("doctors");
+        const source = r.get("source");
+
+        let equipText = `${equipment}: Cena ${price} Kč (úhrada pojišťovny), Doba užití: ${doba}`;
+        if (doctors && doctors.length > 0) {
+            equipText += `, Předepisuje: ${doctors.join(', ')}`;
+        }
+        equipText += `, ${circulation ? 'Vrací se pojišťovně' : 'Nevrací se'}`;
+
+        contextParts.push(equipText);
+        uniqueSources.add(source);
     });
 
     rentalResult.records.forEach(r => {
         const text = r.get("text");
         const source = r.get("source");
         if (text && source) {
-            contextParts.push(`ZDROJ: "${source}"\nTEXT: ${text}`);
+            contextParts.push(text);
             uniqueSources.add(source);
         }
     });
@@ -73,35 +104,36 @@ exports.handler = async (event) => {
         const text = r.get("text");
         const source = r.get("source");
         if (text && source) {
-            contextParts.push(`ZDROJ: "${source}"\nTEXT: ${text}`);
+            contextParts.push(text);
             uniqueSources.add(source);
         }
     });
 
-    const context = contextParts.join("\n\n---\n\n");
+    const context = contextParts.join("\n\n");
 
     const historyBlock = history.map(msg =>
         `${msg.role === 'user' ? 'Uživatel' : 'Asistent'}: ${msg.content}`
     ).join("\n");
 
-    const prompt = `Jsi asistent. Odpověz na otázku podle kontextu.
+    const prompt = `Jsi asistent pro osoby se zdravotním postižením. Odpovídáš PŘESNĚ na položenou otázku. Nepiš obecné informace, které nesouvisí s otázkou.
 
-    INSTRUKCE PRO ODKAZY:
-    1. Pokud odpověď vychází z konkrétního souboru, uveď jeho název.
-    2. Používej pouze názvy ze sekcí "ZDROJ:".
+PRAVIDLA:
+1. Odpověz KONKRÉTNĚ na otázku uživatele
+2. Pokud se ptá na cenu, uveď cenu
+3. Pokud se ptá na místo/lokaci, uveď konkrétní místa
+4. Pokud se ptá na postup, uveď konkrétní kroky
+5. NIKDY neříkej "informace nejsou dostupné" pokud máš relevantní data v kontextu
+6. Na konec přidej "///SUGGESTIONS///" a 3 relevantní follow-up otázky
 
-    INSTRUKCE PRO NÁVRHY (Next Steps):
-    Na úplný konec přidej "///SUGGESTIONS///" a 3 krátké otázky.
+HISTORIE:
+${historyBlock}
 
-    HISTORIE CHATU:
-    ${historyBlock}
+DOSTUPNÁ DATA:
+${context}
 
-    NOVÁ FAKTA (KONTEXT):
-    ${context}
+OTÁZKA: ${question}
 
-    AKTUÁLNÍ OTÁZKA UŽIVATELE: ${question}
-
-    Odpověď:`;
+Odpověď:`;
 
     const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
