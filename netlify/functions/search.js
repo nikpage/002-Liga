@@ -2,92 +2,78 @@ const neo4j = require("neo4j-driver");
 const driver = neo4j.driver(process.env.NEO4J_URI, neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS));
 
 exports.handler = async (event) => {
-  const { question, history = [], model = "gemini-2.5-flash" } = JSON.parse(event.body);
+  // 1. Create a timeout promise to prevent the 500 crash at 10s
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Timeout: Search took too long")), 9500)
+  );
 
   try {
-    const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
-    });
-    const embData = await embReq.json();
-    if (!embData.embedding) throw new Error("Embedding failed");
-    const qVector = embData.embedding.values;
+    const requestLogic = async () => {
+      const { question, history = [], model = "gemini-2.0-flash" } = JSON.parse(event.body);
 
-    const session = driver.session();
-    const result = await session.run(`
-      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
-      YIELD node, score
-      MATCH (node)-[:PART_OF]->(d:Document)
-      OPTIONAL MATCH (d)-->(v:EquipmentVariant)
-      RETURN collect(DISTINCT {
-        text: node.text,
-        src: d.human_name,
-        url: d.url,
-        variant: v.variant_name,
-        price: v.coverage_czk_without_dph,
-        freq: v.doba_uziti
-      }) AS chunks
-    `, { vec: qVector }).finally(() => session.close());
+      // Embedding
+      const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
+      });
+      const embData = await embReq.json();
+      if (!embData.embedding) throw new Error("Embedding failed");
+      const qVector = embData.embedding.values;
 
-    const chunks = result.records[0].get("chunks") || [];
+      // Neo4j - Reduced limit to 4 to stay under 10s limit
+      const session = driver.session();
+      const result = await session.run(`
+        CALL db.index.vector.queryNodes('chunk_vector_index', 4, $vec)
+        YIELD node, score
+        MATCH (node)-[:PART_OF]->(d:Document)
+        OPTIONAL MATCH (d)-->(v:EquipmentVariant)
+        RETURN collect(DISTINCT {
+          text: node.text,
+          src: d.human_name,
+          url: d.url,
+          variant: v.variant_name,
+          price: v.coverage_czk_without_dph,
+          freq: v.doba_uziti
+        }) AS chunks
+      `, { vec: qVector }).finally(() => session.close());
 
-    const context = chunks.map(c =>
-      `DOKUMENT: ${c.src} | TEXT: ${c.text}` +
-      (c.variant ? ` | DATA: ${c.variant} | Cena: ${c.price} Kč | Obnova: ${c.freq}` : "")
-    ).join("\n\n");
+      const chunks = result.records[0].get("chunks") || [];
+      if (chunks.length === 0) return { statusCode: 200, body: JSON.stringify({ answer: "Nenalezena žádná data." }) };
 
-    const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
-    Odpověz v JSON: {"summary": ["odrážka"], "detail": "vysvětlení"}.
-    PŘÍSNÁ PRAVIDLA:
-    1. ZPRACOVÁNÍ DATA: Projdi veškerá DATA a DOKUMENTY. Ceny, termíny a podmínky MUSÍ být v detailu.
-    2. ZÁKAZ STRUČNOSTI: Pokud jsou v DATA varianty, popiš všechny.
-    3. FALLBACK: Pokud v DATA není odpověď, odkaž na Poradnu Ligy vozíčkářů.
-    4. ŽÁDNÉ VYMÝŠLENÍ: Použij jen fakta ze sekce DATA.
-    5. FORMÁT: Tisíce odděluj tečkou (10.000 Kč). ZÁKAZ inline citací.
-    DATA: ${context}
-    OTÁZKA: ${question}`;
+      const context = chunks.map(c => `DOKUMENT: ${c.src} | TEXT: ${c.text}`).join("\n\n");
 
-    const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})), { role: "user", parts: [{ text: systemPrompt }] }],
-        generationConfig: { response_mime_type: "application/json", temperature: 0.0 }
-      })
-    });
+      // AI Generation
+      const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})), { role: "user", parts: [{ text: `DATA: ${context}\nOTÁZKA: ${question}` }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.0 }
+        })
+      });
 
-    const genData = await genReq.json();
-    if (!genData.candidates || !genData.candidates[0].content.parts[0].text) throw new Error("AI Generation failed");
+      const genData = await genReq.json();
+      const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
 
-    let rawText = genData.candidates[0].content.parts[0].text;
-    let responseJson;
-    try {
-      responseJson = JSON.parse(rawText.replace(/```json|```/g, "").trim());
-    } catch (e) {
-      throw new Error("AI JSON Parse Error: " + e.message);
-    }
+      // FIXED: Safely handle uniqueDocs to prevent crash
+      const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src || "Zdroj", url: c.url || "#"}))))
+                              .map(str => JSON.parse(str));
 
-    const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
-                            .map(str => {
-                              const d = JSON.parse(str);
-                              let cleanTitle = d.src.replace(/-/g, ' ');
-                              cleanTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
-                              return { src: cleanTitle, url: d.url };
-                            });
+      const finalAnswer = `## Stručně\n${responseJson.summary.join('\n')}\n\n## Detail\n${responseJson.detail}`;
 
-    const finalAnswer = [
-      `## Stručně`,
-      responseJson.summary.map(s => `* ${s}`).join('\n'),
-      `\n## Podrobné vysvětlení`,
-      responseJson.detail,
-      `\n### Zdroje`,
-      uniqueDocs.slice(0, 3).map(d => `* [${d.src}](${d.url})`).join('\n'),
-      `\n<details><summary>Všechny použité zdroje</summary>\n\n${uniqueDocs.map(d => `* [${d.src}](${d.url})`).join('\n')}\n</details>`
-    ].join('\n');
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: finalAnswer })
+      };
+    };
 
-    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
+    // Race the logic against the 9.5s timeout
+    return await Promise.race([requestLogic(), timeout]);
+
   } catch (err) {
+    console.error("Error detected:", err.message);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
