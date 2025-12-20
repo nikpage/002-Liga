@@ -6,7 +6,7 @@ exports.handler = async (event) => {
   const session = driver.session();
 
   try {
-    // 1. Vector Search
+    // 1. Vector Search for relevance
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     const embData = await embReq.json();
     const qVector = embData.embedding.values;
 
-    // 2. Hybrid Query (Strict Filtering for Human Names and URLs)
+    // 2. Hybrid Query (Strictly filtering for actual human names and URLs)
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       WHERE d.human_name IS NOT NULL AND d.url IS NOT NULL
       OPTIONAL MATCH (d)-[:INCLUDES|HAS_VARIANT|APPLIES_TO]->(v:EquipmentVariant)
       RETURN
-        collect(DISTINCT {text: node.text, src: d.human_name, url: d.url, id: id(node)}) AS chunks,
+        collect(DISTINCT {text: node.text, src: d.human_name, url: d.url}) AS chunks,
         collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS graphData
     `, { vec: qVector });
 
@@ -33,18 +33,18 @@ exports.handler = async (event) => {
 
     const context = [
       ...graphData.filter(v => v.name).map(v => `DATA: ${v.name} | Cena: ${v.price} Kč | Obnova: ${v.freq}`),
-      ...chunks.map(c => `ID ${c.id}: ${c.src} | TEXT: ${c.text}`)
+      ...chunks.map(c => `DOKUMENT: ${c.src} | TEXT: ${c.text}`)
     ].join("\n\n");
 
-    // 3. System Prompt (Restoring Czech Output for Client)
+    // 3. System Prompt (9th Grade Level - Content Only, NO INLINE CITATIONS)
     const systemPrompt = `Jsi seniorní poradce Ligy vozíčkářů. Piš pro žáka 9. třídy.
-    Odpověz v JSON: {"summary": ["odrážka"], "detail": "Text"}
+    Odpověz v JSON: {"summary": ["věcná odrážka"], "detail": "Jasné vysvětlení bez jakýchkoliv citací nebo zdrojů v textu."}
 
     PRAVIDLA:
-    - Používej pouze dodaná DATA.
-    - Citace musí být na KONCI věty nebo odrážky. Nikdy na začátku.
+    - Používej pouze dodaná DATA. Nevymýšlej si.
+    - ZÁKAZ: Do textu nepiš žádné zdroje, ID ani citace typu.
     - Tisíce odděluj tečkou (10.000 Kč). Žádné pozdravy.
-    - Pojišťovna (poukaz) hradí běžné věci. Úřad práce (příspěvek) hradí drahé věci.
+    - Pojišťovna (poukaz) vs Úřad práce (příspěvek na drahé věci).
 
     DATA: ${context}
     OTÁZKA: ${question}`;
@@ -61,14 +61,11 @@ exports.handler = async (event) => {
     const genData = await genReq.json();
     const responseJson = JSON.parse(genData.candidates[0].content.parts[0].text);
 
-    // 4. Source Logic (Strictly evidence-based)
-    const responseText = JSON.stringify(responseJson);
-    const citedIds = [...responseText.matchAll(/\/g)].map(m => m[1]);
-    const citedChunks = chunks.filter(c => citedIds.includes(c.id.toString()));
-    const uniqueDocs = Array.from(new Set(citedChunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
+    // 4. Source Assembly (Using actual titles and links from the database)
+    const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src, url: c.url}))))
                             .map(str => JSON.parse(str));
 
-    // 5. Final Output Assembly (Formatting outside the AI)
+    // 5. Hard-coded Layout (Formatting Outside the AI)
     const finalAnswer = [
       `## Stručně`,
       responseJson.summary.map(s => `* ${s}`).join('\n'),
@@ -79,10 +76,18 @@ exports.handler = async (event) => {
       `\n<details><summary>Všechny použité zdroje</summary>\n\n${uniqueDocs.map(d => `* [${d.src}](${d.url})`).join('\n')}\n</details>`
     ].join('\n');
 
-    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: finalAnswer }) };
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer: finalAnswer })
+    };
 
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: err.message })
+    };
   } finally {
     await session.close();
   }
