@@ -11,8 +11,7 @@ exports.handler = async (event) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
     });
-    const embData = await embReq.json();
-    const qVector = embData.embedding.values;
+    const { embedding: { values: qVector } } = await embReq.json();
 
     const result = await session.run(`
       CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
@@ -34,18 +33,18 @@ exports.handler = async (event) => {
     const prompt = `Jsi seniorní poradce Ligy vozíčkářů. Pomáháš handicapovaným lidem věcně a lidsky (úroveň 9. třídy ZŠ).
 
     STRUKTURA ODPOVĚDI:
-    1. ZAČNI nadpisem '## Stručně'. Dej klíčová fakta a peníze do Markdown tabulky. Buď extrémně stručný.
-    2. PAK nadpis '## Podrobné vysvětlení'. Jdi přímo k věci, žádný balast typu "Na základě dat...".
-    3. PENÍZE: Odděluj tisíce tečkou (např. 10.000 Kč).
-    4. VÝPOČET: Pokud se ptají na limit příjmu u levných věcí (<10.000 Kč), vysvětli výpočet 8 * 4.620 Kč = 36.960 Kč.
-    5. ODKAZY: Na konci vypiš max 3 nejdůležitější odkazy jako [Název dokumentu](URL).
-    6. KONTAKT: info@ligavozic.cz. Zmiň, že mohou do emailu zkopírovat tento chat.
+    1. ZAČNI nadpisem '## Stručně'. Vytvoř přehlednou Markdown tabulku s klíčovými fakty (Cena, Limit, Nárok). Žádný balast.
+    2. NÁSLEDUJE '## Podrobné vysvětlení'. Jdi přímo k věci.
+    3. FORMÁT: Tisíce odděluj tečkou (10.000 Kč).
+    4. VÝPOČET: Pokud jde o limit příjmu u věcí pod 10.000 Kč, vysvětli výpočet (8 * 4.620 Kč = 36.960 Kč pro 1 osobu).
+    5. ODKAZY: Pod vysvětlením vypiš 3 nejdůležitější odkazy jako [Název dokumentu](URL).
+    6. EMAILOVÝ KONTAKT: Místo textu "napište nám" vygeneruj blok '### Návrh e-mailu pro poradnu', kde předpřipravíš text e-mailu na info@ligavozic.cz obsahující shrnutí tohoto dotazu.
     7. TLAČÍTKA: Na úplný konec napiš '///SUGGESTIONS///' a pod to 3 krátké otázky na 1 řádek.
 
     DATA: ${context}
     OTÁZKA: ${question}`;
 
-    const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
+    const genReq = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/\${model}:generateContent?key=\${process.env.GOOGLE_API_KEY}\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
