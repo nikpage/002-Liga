@@ -11,7 +11,7 @@ exports.handler = async (event) => {
 
   const session = driver.session();
   try {
-    // 1. NEUTRAL VECTOR SEARCH: Find the best 5 chunks on ANY topic
+    // 1. Get Embedding for the query
     const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -19,32 +19,35 @@ exports.handler = async (event) => {
     });
     const { embedding: { values: qVector } } = await embReq.json();
 
-    // 2. HOLISTIC GRAPH TRAVERSAL: Get the text + the Document Source + related entities
+    // 2. UNIVERSAL SEARCH: Pull 6 most relevant chunks + their graph connections
     const result = await session.run(`
-      CALL db.index.vector.queryNodes('chunk_vector_index', 5, $vec)
+      CALL db.index.vector.queryNodes('chunk_vector_index', 6, $vec)
       YIELD node, score
       MATCH (node)-[:PART_OF]->(d:Document)
-      OPTIONAL MATCH (node)-[:IS_ASSOCIATED_WITH|CONCERNS|APPLIES_TO]-(related)
+      
+      // Look for any specific variant data if it exists (e.g. Mechanical Wheelchair price)
+      OPTIONAL MATCH (v:EquipmentVariant) 
+      WHERE any(word IN split(toLower($q), ' ') WHERE v.variant_name CONTAINS word)
+
       RETURN 
-        node.text AS text, 
-        d.name AS source, 
-        collect(DISTINCT coalesce(related.name, labels(related)[0])) AS related_info
-    `, { vec: qVector });
+        collect(DISTINCT {text: node.text, src: d.name}) AS chunks,
+        collect(DISTINCT {name: v.variant_name, price: v.coverage_czk_without_dph, freq: v.doba_uziti}) AS specifics
+    `, { vec: qVector, q: question.toLowerCase() });
 
-    const context = result.records.map(r => {
-        return `[ZDROJ: ${r.get("source")}]\nTEXT: ${r.get("text")}\nSOUVISLOSTI: ${r.get("related_info").join(", ")}`;
-    }).join("\n\n---\n\n");
+    const record = result.records[0];
+    const context = [
+      ...record.get("specifics").filter(v => v.name).map(v => `PŘESNÁ DATA: ${v.name} | Úhrada: ${v.price} Kč | Obnova: ${v.freq}`),
+      ...record.get("chunks").map(c => `KAPITOLA (${c.src.toUpperCase()}): ${c.text}`)
+    ].join("\n\n---\n\n");
 
-    // 3. CASEWORKER REASONING PROMPT
-    const prompt = `Jsi vysoce kvalifikovaný sociální poradce pro českou charitu pomáhající lidem s handicapem. 
-TVŮJ CÍL: Poskytnout lidskou, přesnou a specifickou odpověď založenou na dodaných datech.
-
-POKYNY PRO UVAŽOVÁNÍ:
-- Pokud se uživatel ptá na konkrétní věc (např. podsedák), a ty vidíš, že cena je pod 10 000 Kč, uplatni pravidla pro drobné pomůcky (opakované žádosti, limit 8x životní minimum)[cite: 4, 10].
-- Pokud je pomůcka drahá, zmiň souhrnný limit 800 000 Kč za 5 let.
-- Pokud odpověď není v datech explicitně, INFERUJ ji (např. "Podsedák je levná věc, takže se na něj pravděpodobně vztahují tato pravidla..."). Vždy uveď, že jde o tvůj úsudek a proč si to myslíš.
-- NIKDY nepoužívej interní kódy (chunk_1). Používej názvy dokumentů (Příručka pro zaměstnanost).
-- VŽDY zakonči odpověď doporučením kontaktovat lidský helpdesk pro finální ověření.
+    // 3. HUMAN-QUALITY REASONING PROMPT
+    const prompt = `Jsi seniorní sociální poradce české charity. Radíš lidem v těžké životní situaci (důchody, práce, pomůcky).
+TVÉ POVINNOSTI:
+- Pokud se uživatel ptá na "podsedák" nebo jinou levnou věc, použij logiku pro pomůcky pod 10 000 Kč (příjem pod 8x živ. min., opakované žádosti).
+- Pokud se ptá na důchody nebo mateřskou, cituj přesné týdny a procenta z dat (např. 28 týdnů mateřská).
+- Pokud v datech odpověď není, udělej "kvalifikovaný odhad" (inference). Např: "V tabulkách podsedák není, ale protože stojí obvykle 2000 Kč, platí pro něj tato pravidla..."
+- NIKDY necituj ID jako 'chunk_1'. Používej lidské názvy dokumentů.
+- Vždy nabídni kontakt na helpdesk pro potvrzení.
 
 KONTEXT Z DATABÁZE:
 ${context}
@@ -58,10 +61,7 @@ OTÁZKA: ${question}`;
     });
     const genData = await genReq.json();
 
-    return { 
-      statusCode: 200, 
-      body: JSON.stringify({ answer: genData.candidates[0].content.parts[0].text }) 
-    };
+    return { statusCode: 200, body: JSON.stringify({ answer: genData.candidates[0].content.parts[0].text }) };
 
   } finally {
     await session.close();
