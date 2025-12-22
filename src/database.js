@@ -1,9 +1,20 @@
 const neo4j = require("neo4j-driver");
 const { neo4j: cfg } = require("./config");
-const driver = neo4j.driver(cfg.uri, neo4j.auth.basic(cfg.user, cfg.pass));
+let driver = null;
+
+function getDriver() {
+  if (driver) return driver;
+  if (!cfg.uri || !cfg.user || !cfg.pass) return null;
+  driver = neo4j.driver(cfg.uri, neo4j.auth.basic(cfg.user, cfg.pass));
+  return driver;
+}
 
 async function getFullContext(vector, question) {
-  const session = driver.session();
+  const d = getDriver();
+  if (!d) {
+    return { chunks: [], insurance: [], suppliers: [], rentals: [] };
+  }
+  const session = d.session();
   try {
     const [vectorRes, insRes, suppRes, rentRes] = await Promise.all([
       session.run(`

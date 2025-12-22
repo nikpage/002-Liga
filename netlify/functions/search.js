@@ -1,97 +1,68 @@
-cat << 'EOF' > search.js
-const functions = require('@google-cloud/functions-framework');
-const neo4j = require("neo4j-driver");
+const { getEmb, getAnswer } = require("../../src/ai-client");
+const { getFullContext } = require("../../src/database");
+const { formatPrompt } = require("../../src/prompts");
 
-const driver = neo4j.driver(process.env.NEO4J_URI, neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASS));
+function json(statusCode, bodyObj) {
+  return {
+    statusCode,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+    body: JSON.stringify(bodyObj),
+  };
+}
 
-functions.http('search', async (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+function extractJsonText(aiResponse) {
+  // Gemini JSON mode returns a structured response; we defensively extract text.
+  const text =
+    aiResponse?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+    aiResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    "";
+  return String(text || "").trim();
+}
 
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
+exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return json(204, {});
+  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
+
+  let payload;
+  try {
+    payload = JSON.parse(event.body || "{}");
+  } catch {
+    return json(400, { error: "Invalid JSON" });
   }
 
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Timeout: Search took too long")), 9500)
-  );
+  const question = String(payload.question || "").trim();
+  const history = Array.isArray(payload.history) ? payload.history : [];
+  const model = String(payload.model || "gemini-2.0-flash-lite");
+
+  if (!question) return json(400, { error: "Missing question" });
 
   try {
-    const requestLogic = async () => {
-      const { question, history = [], model = "gemini-2.0-flash-lite" } = req.body || {};
+    const vector = await getEmb(question);
+    const ctx = await getFullContext(vector, question);
+    const prompt = formatPrompt(question, ctx);
 
-      if (!question) throw new Error("Missing question");
+    const ai = await getAnswer(model, history, prompt);
+    const raw = extractJsonText(ai);
 
-      const embReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${process.env.GOOGLE_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: "models/embedding-001", content: { parts: [{ text: question }] } })
-      });
-      const embData = await embReq.json();
-      if (!embData.embedding) throw new Error("Embedding failed");
-      const qVector = embData.embedding.values;
+    let parsed;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
 
-      const session = driver.session();
-      const result = await session.run(`
-        CALL db.index.vector.queryNodes('chunk_vector_index', 4, $vec)
-        YIELD node, score
-        MATCH (node)-[:PART_OF]->(d:Document)
-        OPTIONAL MATCH (d)-->(v:EquipmentVariant)
-        RETURN collect(DISTINCT {
-          text: node.text,
-          src: d.human_name,
-          url: d.url,
-          variant: v.variant_name,
-          price: v.coverage_czk_without_dph,
-          freq: v.doba_uziti
-        }) AS chunks
-      `, { vec: qVector }).finally(() => session.close());
+    const answer =
+      parsed?.detail
+        ? (Array.isArray(parsed.summary) ? parsed.summary.join("\n") + "\n\n" : "") + parsed.detail
+        : raw || "Nepodařilo se vytvořit odpověď.";
 
-      const chunks = (result.records.length > 0) ? result.records[0].get("chunks") : [];
-      if (!chunks || chunks.length === 0) return { answer: "Nenalezena žádná data v databázi." };
-
-      const context = chunks.map(c => `DOKUMENT: ${c.src} | TEXT: ${c.text}`).join("\n\n");
-
-      const genReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            ...history.map(h => ({role: h.role === 'user' ? 'user' : 'model', parts: [{text: h.content}]})),
-            { role: "user", parts: [{ text: `DATA: ${context}\nOTÁZKA: ${question}\n\nOdpověz ve formátu JSON s klíči "summary" (pole řetězců) a "detail" (dlouhý text).` }] }
-          ],
-          generationConfig: { response_mime_type: "application/json", temperature: 0.0 }
-        })
-      });
-
-      const genData = await genReq.json();
-      if (!genData.candidates || !genData.candidates[0]) throw new Error("AI response empty");
-
-      const rawAiOutput = genData.candidates[0].content.parts[0].text;
-      const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src || "Zdroj", url: c.url || "#"}))))
-                             .map(str => JSON.parse(str));
-
-      try {
-        const responseJson = JSON.parse(rawAiOutput);
-        const summary = Array.isArray(responseJson.summary) ? responseJson.summary.join('\n') : (responseJson.summary || "");
-        const detail = Array.isArray(responseJson.detail) ? responseJson.detail.join('\n') : (responseJson.detail || "");
-        return { answer: `## Stručně\n${summary}\n\n## Detail\n${detail}\n\n## Zdroje\n${uniqueDocs.map(d => `- [${d.src}](${d.url})`).join('\n')}` };
-      } catch (e) {
-        return { answer: `## Odpověď\n${rawAiOutput}\n\n## Zdroje\n${uniqueDocs.map(d => `- [${d.src}](${d.url})`).join('\n')}` };
-      }
-    };
-
-    const finalResponse = await Promise.race([requestLogic(), timeout]);
-    res.status(200).json(finalResponse);
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    return json(200, { answer });
+  } catch (e) {
+    return json(500, { error: "Server error" });
   }
-});
-EOF
-
-npm install neo4j-driver
-
-gcloud run deploy search --set-env-vars GOOGLE_RUNTIME=nodejs20,GOOGLE_FUNCTION_TARGET=search --source . --region=europe-west1 --allow-unauthenticated
+};

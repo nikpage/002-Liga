@@ -223,7 +223,7 @@
             progressIndicator.style.display = 'block';
 
             try {
-                const response = await fetch('https://europe-west1-gen-lang-client-0651826784.cloudfunctions.net/search', {
+                const response = await fetch('/.netlify/functions/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -235,6 +235,7 @@
 
                 const data = await response.json();
                 progressIndicator.style.display = 'none';
+                if (!response.ok) throw new Error(data?.error || 'Request failed');
                 const answerElement = addMessage('assistant', data.answer);
                 chatHistory.push({ role: "assistant", content: data.answer });
                 if (data.suggestions) addSuggestions(data.suggestions);
