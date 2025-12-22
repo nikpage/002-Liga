@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="cs">
 <head>
+    <meta charset="UTF-8">
     <title>Aplikace Otázky a Odpovědi</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
@@ -22,7 +23,6 @@
         .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
         .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 50px; }
 
-        /* TOOLBAR STYLES (Centered Buttons) */
         .msg-toolbar {
             display: flex;
             gap: 10px;
@@ -51,13 +51,7 @@
             transition: all 0.2s ease;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
-        .tool-btn:hover {
-            background-color: #e2e6ea;
-            border-color: #6c757d;
-            transform: translateY(-1px);
-        }
 
-        /* SUGGESTION BUTTON STYLES (CENTERED) */
         .suggestions-container {
             display: flex;
             flex-wrap: wrap;
@@ -80,21 +74,40 @@
             white-space: nowrap;
         }
 
-        .suggestion-btn:hover {
-            background-color: #007bff;
-            color: white;
+        /* REALIGNED CONTROLS */
+        .controls-area {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            width: 100%;
         }
 
-        /* Controls Area */
-        .controls-area { display: flex; gap: 10px; align-items: center; }
-        input[type="text"] { flex-grow: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 16px; }
-        #sendBtn { padding: 10px 15px; border: none; border-radius: 5px; background-color: #28a745; color: white; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
-        #sendBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
-        select { padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 12px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+            outline: none;
+        }
 
-        /* Progress Indicator Styles (CENTERED) */
+        #sendBtn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            white-space: nowrap;
+        }
+
+        #sendBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
+
         #progress-indicator {
-            margin-top: 5px;
+            margin-top: 10px;
             padding: 10px;
             background-color: white;
             border: 1px solid #ccc;
@@ -104,7 +117,6 @@
             font-weight: bold;
             text-align: center;
         }
-        #progress-indicator.error { color: red; border-color: red; }
     </style>
 </head>
 <body>
@@ -113,12 +125,11 @@
         <div id="messages"></div>
 
         <div class="controls-area">
-            <input type="text" id="question" placeholder="Zadejte svou otázku zde..." onkeydown="if(event.key === 'Enter') ask()">
+            <input type="text" id="question" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
             <button id="sendBtn" onclick="ask()">Odeslat</button>
         </div>
 
         <div id="progress-indicator">Probíhá G3 myšlení...</div>
-
     </div>
 
     <script>
@@ -127,37 +138,16 @@
         const progressIndicator = document.getElementById('progress-indicator');
 
         const progressStages = [
-            "Dotaz Odeslán do AI 🧠...",
-            "Vkládání dotazu do vektoru 🔍...",
-            "Hledání kontextu v Neo4j databázi 💾...",
-            "Zahájení G3 myšlení 💡...",
-            "Krmení datového jednorožce 🦄...",
-            "G3 si zavazuje tkaničky 👟...",
-            "Přepočítávání daně z hlouposti 💰...",
-            "Kontrola, zda má G3 dostatek kávy ☕...",
-            "Synchronizace s vesmírnými daty ✨...",
-            "Model se hádá s databází 🤬...",
-            "Hledání odpovědi v archivních memech 🖼️...",
-            "Čekání, než nám dojde toner 🖨️...",
-            "Trénink psa na aport odpovědi 🐕...",
-            "Měření kvantového šumu 🔭...",
-            "Úplatky pro lokální server 💸...",
-            "Kontrola, zda se čas nezkroutil ⏳...",
-            "Model si dává siestu na slunci ☀️...",
-            "Ladění odpovědi v binární poezii 📜...",
-            "Filtrování konspiračních teorií 👽...",
-            "Příprava na konečnou zkoušku vesmíru 🌌...",
-            "Generování náhodných čísel pro štěstí 🍀...",
-            "Tanec pro rychlejší WiFi 💃...",
-            "Zjišťování, kdo vypnul a zapnul 🔌...",
-            "Třídění ponožek podle barev 🌈...",
-            "Psaní dopisu Nostradamovi 🔮...",
-            "Počítání, kolikrát jsem se zmýlil 🔢...",
-            "Kontrola, zda jsem to náhodou neukradl 😈..."
+            "Dotaz Odeslán do AI 🧠...", "Vkládání dotazu do vektoru 🔍...", "Hledání kontextu v Neo4j databázi 💾...",
+            "Zahájení G3 myšlení 💡...", "Krmení datového jednorožce 🦄...", "G3 si zavazuje tkaničky 👟...",
+            "Přepočítávání daně z hlouposti 💰...", "Kontrola, zda má G3 dostatek kávy ☕...", "Synchronizace s vesmírnými daty ✨...",
+            "Model se hádá s databází 🤬...", "Hledání odpovědi v archivních memech 🖼️...", "Čekání, než nám dojde toner 🖨️...",
+            "Trénink psa na aport odpovědi 🐕...", "Měření kvantového šumu 🔭...", "Úplatky pro lokální server 💸...",
+            "Kontrola, zda se čas nezkroutil ⏳...", "Model si dává siestu na slunci ☀️...", "Ladění odpovědi v binární poezii 📜...",
+            "Filtrování konspiračních teorií 👽...", "Příprava na konečnou zkoušku vesmíru 🌌...", "Generování náhodných čísel pro štěstí 🍀...",
+            "Tanec pro rychlejší WiFi 💃...", "Zjišťování, kdo vypnul a zapnul 🔌...", "Třídění ponožek podle barev 🌈...",
+            "Psaní dopisu Nostradamovi 🔮...", "Počítání, kolikrát jsem se zmýlil 🔢...", "Kontrola, zda jsem to náhodou neukradl 😈..."
         ];
-
-        const FUNNY_STAGES_START_INDEX = 4;
-        const INTERVAL_TIME = 3000;
 
         function downloadFile(filename, text) {
             const element = document.createElement('a');
@@ -171,60 +161,42 @@
 
         function downloadHistory() {
             if (chatHistory.length === 0) return;
-            const text = chatHistory.map(msg =>
-                `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`
-            ).join('\n\n');
+            const text = chatHistory.map(msg => `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`).join('\n\n');
             downloadFile('chat_historie.txt', text);
         }
 
-        // UPDATED: Now returns the message element so we can control it later
         function addMessage(role, content) {
             const msgs = document.getElementById('messages');
             const newMsg = document.createElement('div');
-            newMsg.classList.add('message');
-            newMsg.classList.add(role === 'user' ? 'user-msg' : 'bot-msg');
-
-            const contentDiv = document.createElement('div');
-            contentDiv.innerHTML = marked.parse(content);
-            newMsg.appendChild(contentDiv);
+            newMsg.classList.add('message', role === 'user' ? 'user-msg' : 'bot-msg');
+            newMsg.innerHTML = marked.parse(content);
 
             if (role === 'assistant') {
                 const toolbar = document.createElement('div');
                 toolbar.className = 'msg-toolbar';
-
                 const dlReplyBtn = document.createElement('button');
                 dlReplyBtn.className = 'tool-btn';
                 dlReplyBtn.innerHTML = '💾 Odpověď';
                 dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
-
                 const dlChatBtn = document.createElement('button');
                 dlChatBtn.className = 'tool-btn';
                 dlChatBtn.innerHTML = '📂 Celý chat';
                 dlChatBtn.onclick = () => downloadHistory();
-
                 toolbar.appendChild(dlReplyBtn);
                 toolbar.appendChild(dlChatBtn);
                 newMsg.appendChild(toolbar);
             }
 
             msgs.appendChild(newMsg);
-
-            // Only force scroll for user messages here.
-            // Assistant scroll is handled in ask() to prevent "button drag"
-            if (role === 'user') {
-                newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }
-
-            return newMsg; // Return element for later use
+            if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return newMsg;
         }
 
         function addSuggestions(suggestions) {
             if (!suggestions || suggestions.length === 0) return;
-
             const msgs = document.getElementById('messages');
             const container = document.createElement('div');
             container.className = 'suggestions-container';
-
             suggestions.forEach(text => {
                 const btn = document.createElement('button');
                 btn.className = 'suggestion-btn';
@@ -232,46 +204,13 @@
                 btn.onclick = () => ask(text);
                 container.appendChild(btn);
             });
-
             msgs.appendChild(container);
-            // REMOVED: container.scrollIntoView - this was causing the issue!
-        }
-
-        function startProgress() {
-            progressIndicator.style.display = 'block';
-            progressIndicator.classList.remove('error');
-            let stageIndex = 0;
-
-            progressInterval = setInterval(() => {
-                let index = stageIndex % progressStages.length;
-                if (stageIndex < FUNNY_STAGES_START_INDEX) {
-                   progressIndicator.textContent = progressStages[index];
-                } else {
-                   let funnyStages = progressStages.slice(FUNNY_STAGES_START_INDEX);
-                   let randomIndex = Math.floor(Math.random() * funnyStages.length);
-                   progressIndicator.textContent = funnyStages[randomIndex];
-                }
-                stageIndex++;
-            }, INTERVAL_TIME);
-        }
-
-        function stopProgress(isError = false) {
-            clearInterval(progressInterval);
-            if (isError) {
-                progressIndicator.textContent = "CHYBA: Zpracování selhalo.";
-                progressIndicator.classList.add('error');
-            } else {
-                progressIndicator.style.display = 'none';
-            }
         }
 
         async function ask(suggestionText = null) {
             const input = document.getElementById('question');
             const btn = document.getElementById('sendBtn');
-
             const question = suggestionText || input.value.trim();
-            const selectedModel = "gemini-2.0-flash-lite";
-
             if (!question) return;
 
             addMessage('user', question);
@@ -281,49 +220,28 @@
 
             const oldSuggestions = document.querySelectorAll('.suggestions-container');
             oldSuggestions.forEach(el => el.style.display = 'none');
-
-            startProgress();
+            progressIndicator.style.display = 'block';
 
             try {
                 const response = await fetch('https://europe-west1-gen-lang-client-0651826784.cloudfunctions.net/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        question,
+                        question: "Odpovídej pouze v češtině. Dotaz: " + question,
                         history: chatHistory,
-                        model: selectedModel
+                        model: "gemini-2.0-flash-lite"
                     })
                 });
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    stopProgress(true);
-                    addMessage('assistant', 'CHYBA SERVERU: ' + errorData.answer);
-                    return;
-                }
-
-                stopProgress(false);
                 const data = await response.json();
-
-                // 1. Add Answer & Capture the element
+                progressIndicator.style.display = 'none';
                 const answerElement = addMessage('assistant', data.answer);
                 chatHistory.push({ role: "assistant", content: data.answer });
-
-                // 2. Add Buttons (silently, without scrolling)
-                if (data.suggestions) {
-                    addSuggestions(data.suggestions);
-                }
-
-                // 3. FORCE SCROLL TO TOP OF ANSWER (Overrides everything else)
-                // Small delay ensures DOM is fully rendered before scrolling
-                setTimeout(() => {
-                    answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-
+                if (data.suggestions) addSuggestions(data.suggestions);
+                setTimeout(() => { answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
             } catch (error) {
-                stopProgress(true);
+                progressIndicator.style.display = 'none';
                 addMessage('assistant', 'CHYBA SYSTÉMU: Zkontrolujte připojení.');
-                console.error(error);
             } finally {
                 btn.disabled = false;
             }
