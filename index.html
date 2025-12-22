@@ -290,7 +290,7 @@
             startProgress();
 
             try {
-                const response = await fetch('/.netlify/functions/search', {
+                const response = await fetch('https://europe-west1-gen-lang-client-0651826784.cloudfunctions.net/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
