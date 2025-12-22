@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       if (!embData.embedding) throw new Error("Embedding failed");
       const qVector = embData.embedding.values;
 
-      // 2. Neo4j - Vector Search (RETAINED)
+      // 2. Neo4j - Vector Search
       const session = driver.session();
       const result = await session.run(`
         CALL db.index.vector.queryNodes('chunk_vector_index', 4, $vec)
@@ -63,16 +63,19 @@ exports.handler = async (event) => {
 
       const rawAiOutput = genData.candidates[0].content.parts[0].text;
 
-      // RESTORED: Your original uniqueDocs logic
       const uniqueDocs = Array.from(new Set(chunks.map(c => JSON.stringify({src: c.src || "Zdroj", url: c.url || "#"}))))
                               .map(str => JSON.parse(str));
 
       try {
         const responseJson = JSON.parse(rawAiOutput);
+
+        // FIX: Ensure summary is joined if it's an array
         const summary = Array.isArray(responseJson.summary) ? responseJson.summary.join('\n') : (responseJson.summary || "");
 
-        // RESTORED: Your original finalAnswer formatting including uniqueDocs
-        const finalAnswer = `## Stručně\n${summary}\n\n## Detail\n${responseJson.detail}\n\n## Zdroje\n${uniqueDocs.map(d => `- [${d.src}](${d.url})`).join('\n')}`;
+        // FIX: Ensure detail is handled if it's an array or missing
+        const detail = Array.isArray(responseJson.detail) ? responseJson.detail.join('\n') : (responseJson.detail || "");
+
+        const finalAnswer = `## Stručně\n${summary}\n\n## Detail\n${detail}\n\n## Zdroje\n${uniqueDocs.map(d => `- [${d.src}](${d.url})`).join('\n')}`;
 
         return {
           statusCode: 200,
@@ -80,7 +83,6 @@ exports.handler = async (event) => {
           body: JSON.stringify({ answer: finalAnswer })
         };
       } catch (parseError) {
-        // Fallback that still includes your sources even if JSON parsing fails
         const fallbackAnswer = `## Odpověď\n${rawAiOutput}\n\n## Zdroje\n${uniqueDocs.map(d => `- [${d.src}](${d.url})`).join('\n')}`;
         return {
           statusCode: 200,
