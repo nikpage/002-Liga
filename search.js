@@ -4,11 +4,6 @@ const neo4j = require('neo4j-driver');
 functions.http('search', async (req, res) => {
     res.set('Access-Control-Allow-Origin', '*');
     
-    // Health check - respond immediately
-    if (req.path === '/' && req.method === 'GET') {
-        return res.status(200).send('OK');
-    }
-    
     if (req.method === 'OPTIONS') {
         res.set('Access-Control-Allow-Methods', 'GET, POST');
         res.set('Access-Control-Allow-Headers', 'Content-Type');
@@ -22,9 +17,9 @@ functions.http('search', async (req, res) => {
             neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD)
         );
 
-        const { query } = req.body || {};
+        const { query } = req.body || req.query || {};
         if (!query) {
-            return res.status(400).send({ error: 'Query is required' });
+            return res.status(200).send('OK');
         }
 
         const session = driver.session();
