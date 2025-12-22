@@ -1,11 +1,12 @@
 {
-  "name": "search",
+  "name": "002-liga-qa",
   "version": "1.0.0",
   "main": "search.js",
-  "scripts": {
-    "start": "npx @google-cloud/functions-framework --target=search"
-  },
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.0.0"
+    "@google-cloud/functions-framework": "^3.0.0",
+    "neo4j-driver": "^5.0.0"
+  },
+  "scripts": {
+    "start": "functions-framework --target=search"
   }
 }
