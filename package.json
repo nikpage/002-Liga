@@ -1,9 +1,10 @@
 {
   "name": "002-liga-qa",
   "version": "1.0.0",
-  "main": "search.js",
+  "main":"server.js",
   "dependencies": {
     "@google-cloud/functions-framework": "^3.0.0",
+    "express": "^5.2.1",
     "neo4j-driver": "^5.0.0"
   }
 }
