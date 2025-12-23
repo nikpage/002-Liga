@@ -1,6 +1,7 @@
-const { getFullContext } = require('./database');
-const { formatPrompt } = require('./prompts');
-const { getEmb, getAnswer } = require('./ai-client');
+const path = require('path');
+const { getFullContext } = require(path.join(__dirname, 'database'));
+const { formatPrompt } = require(path.join(__dirname, 'prompts'));
+const { getEmb, getAnswer } = require(path.join(__dirname, 'ai-client'));
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -29,7 +30,6 @@ exports.handler = async (event) => {
     if (aiResponse.candidates?.[0]?.content?.parts?.[0]) {
       const rawText = aiResponse.candidates[0].content.parts[0].text;
       try {
-        // Fix: Remove potential markdown code blocks that cause JSON.parse to fail
         const cleanedJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleanedJson);
 
