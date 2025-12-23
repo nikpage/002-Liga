@@ -2,6 +2,10 @@ const { getFullContext } = require('./database.js');
 const { formatPrompt } = require('./prompts.js');
 const { getEmb, getAnswer } = require('./ai-client.js');
 
+function capitalizeTitle(title) {
+  if (!title) return '';
+  return title.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -34,27 +38,36 @@ exports.handler = async (event) => {
         const parsed = JSON.parse(cleanedJson);
 
         let sections = [];
-        if (parsed.strucne?.length > 0) sections.push("**Stručně:**\n" + parsed.strucne.map(f => `• ${f}`).join('\n'));
-        if (parsed.detaily) sections.push("**Detaily:**\n" + parsed.detaily);
-        if (parsed.vice_informaci) sections.push("**Více informací:**\n" + parsed.vice_informaci);
+        
+        if (parsed.strucne?.length > 0) {
+          sections.push("**Stručně:**\n\n" + parsed.strucne.map(f => `• ${f}`).join('\n\n'));
+        }
+        
+        if (parsed.detaily) {
+          sections.push("**Detaily:**\n\n" + parsed.detaily);
+        }
+        
+        if (parsed.vice_informaci) {
+          sections.push("**Více informací:**\n\n" + parsed.vice_informaci);
+        }
 
-        answer = sections.join('\n\n');
+        answer = sections.join('\n\n---\n\n');
 
         const usedSources = [];
         if (Array.isArray(parsed.pouzite_zdroje)) {
           parsed.pouzite_zdroje.forEach(idx => {
             const chunk = context.chunks[idx - 1];
             if (chunk && chunk.title && chunk.url && !usedSources.find(s => s.url === chunk.url)) {
-              usedSources.push({ title: chunk.title, url: chunk.url });
+              usedSources.push({ title: capitalizeTitle(chunk.title), url: chunk.url });
             }
           });
         }
 
         if (usedSources.length > 0) {
-          answer += "\n\n**Zdroje:**\n" + usedSources.slice(0, 3).map(s => `• [${s.title}](${s.url})`).join('\n');
+          answer += "\n\n---\n\n**Zdroje:**\n\n" + usedSources.slice(0, 3).map(s => `• [${s.title}](${s.url})`).join('\n\n');
           if (usedSources.length > 3) {
             answer += `\n\n<details><summary>Další zdroje (${usedSources.length - 3})</summary>\n\n` +
-                      usedSources.slice(3).map(s => `• [${s.title}](${s.url})`).join('\n') + "\n</details>";
+                      usedSources.slice(3).map(s => `• [${s.title}](${s.url})`).join('\n\n') + "\n\n</details>";
           }
         }
       } catch (e) {
