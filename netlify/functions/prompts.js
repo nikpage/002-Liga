@@ -1,4 +1,3 @@
-cat > netlify/functions/prompts.js << 'EOF'
 function formatPrompt(query, data) {
   const ctx = data.chunks.map((c, i) =>
     `[${i+1}] NÁZEV: ${c.title}\nTEXT: ${c.text}`
@@ -35,4 +34,3 @@ PŘÍKLADY ŠPATNÝCH ODPOVĚDÍ:
 ✗ "Obraťte se na odborníky" (chybí jména a kontakty)`;
 }
 module.exports = { formatPrompt };
-EOF
