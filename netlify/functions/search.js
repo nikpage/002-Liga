@@ -37,14 +37,51 @@ exports.handler = async (event) => {
       if (content && content.parts && content.parts[0]) {
         try {
           const parsed = JSON.parse(content.parts[0].text);
-          if (parsed.summary) {
-            answer = Array.isArray(parsed.summary)
-              ? parsed.summary.join('\n\n')
-              : parsed.summary;
+
+          // Build answer with three sections
+          let sections = [];
+          if (parsed.strucne && parsed.strucne.length > 0) {
+            sections.push("**Stručně:**\n" + parsed.strucne.map(f => `• ${f}`).join('\n'));
           }
-          if (parsed.detail) {
-            answer += '\n\n' + parsed.detail;
+          if (parsed.detaily) {
+            sections.push("**Detaily:**\n" + parsed.detaily);
           }
+          if (parsed.vice_informaci) {
+            sections.push("**Více informací:**\n" + parsed.vice_informaci);
+          }
+
+          answer = sections.join('\n\n');
+
+          // Extract actual sources used
+          const usedSources = [];
+          if (parsed.pouzite_zdroje && Array.isArray(parsed.pouzite_zdroje)) {
+            parsed.pouzite_zdroje.forEach(idx => {
+              const chunk = context.chunks[idx - 1];
+              if (chunk && !usedSources.find(s => s.url === chunk.url)) {
+                usedSources.push({ title: chunk.title, url: chunk.url });
+              }
+            });
+          }
+
+          // Add sources to answer
+          if (usedSources.length > 0) {
+            const top3 = usedSources.slice(0, 3);
+            const rest = usedSources.slice(3);
+
+            answer += "\n\n**Zdroje:**\n";
+            top3.forEach(s => {
+              answer += `• [${s.title}](${s.url})\n`;
+            });
+
+            if (rest.length > 0) {
+              answer += "\n<details><summary>Další zdroje (" + rest.length + ")</summary>\n\n";
+              rest.forEach(s => {
+                answer += `• [${s.title}](${s.url})\n`;
+              });
+              answer += "</details>";
+            }
+          }
+
         } catch (e) {
           answer = content.parts[0].text;
         }
