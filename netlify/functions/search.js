@@ -52,10 +52,10 @@ exports.handler = async (event) => {
         }
 
         if (usedSources.length > 0) {
-          answer += "\n\n**Zdroje:**\n" + usedSources.slice(0, 3).map(s => `• [${s.title}](${s.url})`).join('\n');
+          answer += "\n\n**Zdroje:**\n" + usedSources.slice(0, 3).map(s => `• ${s.title}`).join('\n');
           if (usedSources.length > 3) {
             answer += `\n\n<details><summary>Další zdroje (${usedSources.length - 3})</summary>\n\n` +
-                      usedSources.slice(3).map(s => `• [${s.title}](${s.url})`).join('\n') + "\n</details>";
+                      usedSources.slice(3).map(s => `• ${s.title}`).join('\n') + "\n</details>";
           }
         }
       } catch (e) {
