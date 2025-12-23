@@ -6,6 +6,6 @@ module.exports = {
   },
   google: {
     key: process.env.GOOGLE_API_KEY,
-    embModel: "models/embedding-001"
+    embModel: "text-embedding-004"
   }
 };
