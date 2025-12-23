@@ -25,3 +25,4 @@ FORMÁTOVÁNÍ "strucne":
 - Fakta → použij odrážky
 - Zaměř se pouze na odpověď na otázku, ne na obecné informace`;
 }
+module.exports = { formatPrompt };
