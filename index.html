@@ -125,7 +125,7 @@
         <div id="messages"></div>
 
         <div class="controls-area">
-            <input type="text" id="question" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
+            <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
             <button id="sendBtn" onclick="ask()">Odeslat</button>
         </div>
 
@@ -208,15 +208,15 @@
         }
 
         async function ask(suggestionText = null) {
-            const input = document.getElementById('question');
+            const input = document.getElementById('query');
             const btn = document.getElementById('sendBtn');
-            const question = suggestionText || input.value.trim();
-            if (!question) return;
+            const query = suggestionText || input.value.trim();
+            if (!query) return;
 
-            addMessage('user', question);
+            addMessage('user', query);
             input.value = '';
             btn.disabled = true;
-            chatHistory.push({ role: "user", content: question });
+            chatHistory.push({ role: "user", content: query });
 
             const oldSuggestions = document.querySelectorAll('.suggestions-container');
             oldSuggestions.forEach(el => el.style.display = 'none');
@@ -227,7 +227,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        question: "Odpovídej pouze v češtině. Dotaz: " + question,
+                        query: "Odpovídej pouze v češtině. Dotaz: " + query,
                         history: chatHistory,
                         model: "gemini-2.0-flash-lite"
                     })
