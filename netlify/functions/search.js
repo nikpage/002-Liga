@@ -30,7 +30,6 @@ exports.handler = async (event) => {
     if (aiResponse.candidates?.[0]?.content?.parts?.[0]) {
       const rawText = aiResponse.candidates[0].content.parts[0].text;
       try {
-        // Fix: Remove potential markdown code blocks that cause JSON.parse to fail
         const cleanedJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleanedJson);
 
@@ -45,17 +44,17 @@ exports.handler = async (event) => {
         if (Array.isArray(parsed.pouzite_zdroje)) {
           parsed.pouzite_zdroje.forEach(idx => {
             const chunk = context.chunks[idx - 1];
-            if (chunk && !usedSources.find(s => s.url === chunk.url)) {
+            if (chunk && chunk.title && chunk.url && !usedSources.find(s => s.url === chunk.url)) {
               usedSources.push({ title: chunk.title, url: chunk.url });
             }
           });
         }
 
         if (usedSources.length > 0) {
-          answer += "\n\n**Zdroje:**\n" + usedSources.slice(0, 3).map(s => `• ${s.title}`).join('\n');
+          answer += "\n\n**Zdroje:**\n" + usedSources.slice(0, 3).map(s => `• [${s.title}](${s.url})`).join('\n');
           if (usedSources.length > 3) {
             answer += `\n\n<details><summary>Další zdroje (${usedSources.length - 3})</summary>\n\n` +
-                      usedSources.slice(3).map(s => `• ${s.title}`).join('\n') + "\n</details>";
+                      usedSources.slice(3).map(s => `• [${s.title}](${s.url})`).join('\n') + "\n</details>";
           }
         }
       } catch (e) {
