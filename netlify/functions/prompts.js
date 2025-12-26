@@ -9,11 +9,13 @@ ${ctx}
 OTÁZKA: ${query}
 
 KRITICKÁ PRAVIDLA - POVINNÁ:
-1. Odpověz POUZE na základě poskytnutého kontextu - NIKDY nevymýšlej informace. Projdi VŠECH 15 zdrojů a najdi ty relevantní.
-2. Použij VŠECHNA relevantní data z kontextu - ne jen část
-3. Buď KONKRÉTNÍ - uváděj jména, čísla, adresy, telefonní čísla, e-maily, částky
-4. Buď PODROBNÝ - nedávej obecné odpovědi, když máš specifická data
-5. Pokud kontext obsahuje kontaktní údaje, úřední postupy, nebo konkrétní čísla - VŽDY je zahrň
+1. PŘEČTI SI VŠECH ${data.chunks.length} ZDROJŮ ÚPLNĚ - relevantní informace může být kdekoliv
+2. Odpověz POUZE na základě poskytnutého kontextu - NIKDY nevymýšlej informace
+3. Použij VŠECHNA relevantní data z kontextu - ne jen část
+4. Buď KONKRÉTNÍ - uváděj jména, čísla, adresy, telefonní čísla, e-maily, částky
+5. Buď PODROBNÝ - nedávej obecné odpovědi, když máš specifická data
+6. Pokud kontext obsahuje kontaktní údaje, úřední postupy, nebo konkrétní čísla - VŽDY je zahrň
+7. Pokud informace EXISTUJE v kontextu, MUSÍŠ ji použít - i když je ve zdroji [15]
 
 FORMÁT ODPOVĚDI - JSON:
 {
