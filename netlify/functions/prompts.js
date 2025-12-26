@@ -9,7 +9,7 @@ ${ctx}
 OTÁZKA: ${query}
 
 KRITICKÁ PRAVIDLA - POVINNÁ:
-1. Odpověz POUZE na základě poskytnutého kontextu - NIKDY nevymýšlej informace
+1. Odpověz POUZE na základě poskytnutého kontextu - NIKDY nevymýšlej informace. Projdi VŠECH 15 zdrojů a najdi ty relevantní.
 2. Použij VŠECHNA relevantní data z kontextu - ne jen část
 3. Buď KONKRÉTNÍ - uváděj jména, čísla, adresy, telefonní čísla, e-maily, částky
 4. Buď PODROBNÝ - nedávej obecné odpovědi, když máš specifická data
