@@ -1,27 +1,30 @@
-const neo4j = require("neo4j-driver");
-const { neo4j: cfg } = require("./config");
-const driver = neo4j.driver(cfg.uri, neo4j.auth.basic(cfg.user, cfg.pass));
+const { createClient } = require('@supabase/supabase-js');
+const { supabase: cfg } = require("./config");
+
+const supabase = createClient(cfg.url, cfg.key);
 
 async function getFullContext(vector, query) {
-  const session = driver.session();
   try {
-    const vectorRes = await session.run(
-      `CALL db.index.vector.queryNodes('chunk_vector_index', 15, $vec)
-       YIELD node
-       MATCH (node)-[:PART_OF]->(d:Document)
-       RETURN node.text AS text, d.human_name AS title, d.url AS url`,
-      { vec: vector }
-    );
+    // Use Supabase vector search to find similar chunks
+    const { data, error } = await supabase.rpc('match_chunks', {
+      query_embedding: vector,
+      match_threshold: 0.3,
+      match_count: 15
+    });
 
-    const chunks = vectorRes.records.map(r => ({
-      text: r.get("text"),
-      title: r.get("title"),
-      url: r.get("url")
+    if (error) throw error;
+
+    const chunks = data.map(row => ({
+      text: row.content,
+      title: row.document_title,
+      url: row.source_url
     }));
 
     return { chunks };
-  } finally {
-    await session.close();
+  } catch (error) {
+    console.error("Database error:", error);
+    throw error;
   }
 }
+
 module.exports = { getFullContext };
