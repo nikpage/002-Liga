@@ -25,6 +25,7 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const context = await getFullContext(vector, query);
+    console.log('Search returned chunks:', context.chunks.map(c => c.title));
     const prompt = formatPrompt(query, context);
     const aiResponse = await getAnswer(model, history, prompt);
 
@@ -38,15 +39,15 @@ exports.handler = async (event) => {
         const parsed = JSON.parse(cleanedJson);
 
         let sections = [];
-        
+
         if (parsed.strucne?.length > 0) {
           sections.push("**Stručně:**\n\n" + parsed.strucne.map(f => `• ${f}`).join('\n\n'));
         }
-        
+
         if (parsed.detaily) {
           sections.push("**Detaily:**\n\n" + parsed.detaily);
         }
-        
+
         if (parsed.vice_informaci) {
           sections.push("**Více informací:**\n\n" + parsed.vice_informaci);
         }
