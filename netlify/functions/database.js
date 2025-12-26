@@ -9,7 +9,7 @@ async function getFullContext(vector, query) {
     const { data, error } = await supabase.rpc('match_chunks', {
       query_embedding: vector,
       match_threshold: 0.1,
-      match_count: 15
+      match_count: 25
     });
 
     if (error) throw error;
