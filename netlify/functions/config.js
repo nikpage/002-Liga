@@ -1,8 +1,7 @@
 module.exports = {
-  neo4j: {
-    uri: process.env.NEO4J_URI,
-    user: process.env.NEO4J_USER,
-    pass: process.env.NEO4J_PASS
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_SERVICE_ROLE_KEY
   },
   google: {
     key: process.env.GOOGLE_API_KEY,
