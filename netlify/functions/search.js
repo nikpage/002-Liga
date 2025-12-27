@@ -1,9 +1,7 @@
 exports.handler = async (event) => {
-  console.log("FUNCTION_TRIGGERED"); // This MUST show up in logs
-
   try {
-    const body = JSON.parse(event.body);
-    const { query, data } = body;
+    const { query, data } = JSON.parse(event.body);
+    const ctx = data.chunks.map((c, i) => `[ID ${i+1}] ${c.text}`).join("\n\n");
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -13,7 +11,7 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        messages: [{ role: "user", content: `Query: ${query}` }],
+        messages: [{ role: "user", content: `Context: ${ctx}\n\nQuery: ${query}` }],
         response_format: { type: "json_object" }
       })
     });
@@ -22,10 +20,9 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(result.choices[0].message.content)
+      body: result.choices[0].message.content
     };
   } catch (err) {
-    console.error("CATCH_ERROR:", err.message);
     return {
       statusCode: 200,
       body: JSON.stringify({ error: err.message })
