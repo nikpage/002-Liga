@@ -1,21 +1,10 @@
 exports.handler = async (event) => {
-  // 1. Log the start immediately to kill the "silent" aspect
-  console.log("Function started. Event body:", event.body);
+  console.log("FUNCTION_TRIGGERED"); // This MUST show up in logs
 
   try {
-    const { query, data } = JSON.parse(event.body);
+    const body = JSON.parse(event.body);
+    const { query, data } = body;
 
-    // Safety check for data structure
-    if (!data || !data.chunks) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ strucne: ["No data"], detaily: "Database chunks missing." })
-      };
-    }
-
-    const ctx = data.chunks.map((c, i) => `[ID ${i+1}] ${c.text}`).join("\n\n");
-
-    // 2. Use native fetch (No axios b*******)
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -24,30 +13,22 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        messages: [{ role: "user", content: `Context: ${ctx}\n\nQuery: ${query}` }],
+        messages: [{ role: "user", content: `Query: ${query}` }],
         response_format: { type: "json_object" }
       })
     });
 
     const result = await response.json();
-    console.log("AI result received.");
-
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: result.choices[0].message.content
+      body: JSON.stringify(result.choices[0].message.content)
     };
-
-  } catch (error) {
-    // 3. Force a log of the error so it isn't silent anymore
-    console.error("CRITICAL ERROR:", error);
+  } catch (err) {
+    console.error("CATCH_ERROR:", err.message);
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        strucne: ["System Error"],
-        detaily: error.message
-      })
+      body: JSON.stringify({ error: err.message })
     };
   }
 };
