@@ -3,40 +3,50 @@ const { getFullContext } = require("./database");
 const { formatPrompt } = require("./prompts");
 
 exports.handler = async (event) => {
+  let step = "Initializing";
   try {
-    // 1. Parse the incoming user query
+    step = "Parsing Request Body";
+    if (!event.body) throw new Error("Request body is empty");
     const { query } = JSON.parse(event.body);
-    if (!query) throw new Error("No query provided");
+    if (!query) throw new Error("Property 'query' is missing in request");
 
-    // 2. Convert query to vector using your Google AI client
+    step = "Generating Embedding (Google API)";
+    // Calls getEmb from ai-client.js using GOOGLE_API_KEY
     const vector = await getEmb(query);
 
-    // 3. Fetch relevant chunks from Supabase using that vector
+    step = "Fetching Context (Supabase RPC)";
+    // Calls match_chunks in Supabase
     const data = await getFullContext(vector);
 
-    // 4. Format the prompt using your rigid JSON schema in prompts.js
+    step = "Formatting Prompt";
+    // Uses the JSON schema defined in prompts.js
     const prompt = formatPrompt(query, data);
 
-    // 5. Generate the final response using Google Gemini (as defined in ai-client)
-    // We pass an empty array for history if this is a single search
+    step = "Generating Answer (Gemini API)";
+    // Calls Google Gemini via ai-client.js
     const aiResponse = await getAnswer("gemini-1.5-flash", [], prompt);
 
-    // 6. Extract the JSON content from the Google API response
-    const content = aiResponse.candidates[0].content.parts[0].text;
+    step = "Parsing AI Response Structure";
+    // Checks if the response actually contains the expected candidates
+    if (!aiResponse.candidates || !aiResponse.candidates[0]) {
+      throw new Error("Google AI returned no candidates. Check safety filters or quota.");
+    }
+    const result = aiResponse.candidates[0].content.parts[0].text;
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: content // This will be the JSON object defined in prompts.js
+      body: result
     };
   } catch (err) {
-    console.error("Handler Error:", err);
+    console.error(`Error at step [${step}]:`, err.message);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         error: err.message,
-        stack: err.stack
+        failedAt: step,
+        help: "Check Netlify environment variables and Supabase RPC names."
       })
     };
   }
