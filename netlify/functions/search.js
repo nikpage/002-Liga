@@ -1,5 +1,5 @@
 const { getFullContext } = require('./database.js');
-const { formatPrompt } = require('./prompts.js');
+const { rewritePrompt, formatPrompt } = require('./prompts.js');
 const { getEmb, getAnswer } = require('./ai-client.js');
 
 function capitalizeTitle(title) {
@@ -23,13 +23,19 @@ exports.handler = async (event) => {
     const { query, history = [], model = "gemini-2.0-flash-lite" } = JSON.parse(event.body || "{}");
     if (!query) return { statusCode: 400, body: JSON.stringify({ error: "No query" }) };
 
-    const vector = await getEmb(query);
+    // 1. TRANSLATE TYPOS/ROUGH INPUT TO EXPERT TERMS
+    const rewriteResult = await getAnswer(model, [], rewritePrompt(query));
+    const expertQuery = rewriteResult.candidates[0].content.parts[0].text.trim();
+
+    // 2. SEARCH DATABASE USING EXPERT TERMS
+    const vector = await getEmb(expertQuery);
     const context = await getFullContext(vector, query);
-    console.log('Search returned chunks:', context.chunks.map(c => c.title));
+
+    // 3. GENERATE FINAL RESPONSE
     const prompt = formatPrompt(query, context);
     const aiResponse = await getAnswer(model, history, prompt);
 
-    let answer = "Omlouváme se, nepodařilo se získat odpověď.";
+    let answer = "V databázi nejsou informace o tomto tématu.";
     let suggestions = [];
 
     if (aiResponse.candidates?.[0]?.content?.parts?.[0]) {
@@ -39,15 +45,12 @@ exports.handler = async (event) => {
         const parsed = JSON.parse(cleanedJson);
 
         let sections = [];
-
         if (parsed.strucne?.length > 0) {
           sections.push("**Stručně:**\n\n" + parsed.strucne.map(f => `• ${f}`).join('\n\n'));
         }
-
         if (parsed.detaily) {
           sections.push("**Detaily:**\n\n" + parsed.detaily);
         }
-
         if (parsed.vice_informaci) {
           sections.push("**Více informací:**\n\n" + parsed.vice_informaci);
         }
@@ -66,10 +69,6 @@ exports.handler = async (event) => {
 
         if (usedSources.length > 0) {
           answer += "\n\n---\n\n**Zdroje:**\n\n" + usedSources.slice(0, 3).map(s => `• [${s.title}](${s.url})`).join('\n\n');
-          if (usedSources.length > 3) {
-            answer += `\n\n<details><summary>Další zdroje (${usedSources.length - 3})</summary>\n\n` +
-                      usedSources.slice(3).map(s => `• [${s.title}](${s.url})`).join('\n\n') + "\n\n</details>";
-          }
         }
       } catch (e) {
         answer = rawText;
@@ -83,7 +82,6 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error("Critical Error:", error.message);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
