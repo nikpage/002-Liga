@@ -1,32 +1,40 @@
+// prompts.js
 module.exports = {
-  // PHASE 1: Precise Expert Translation
-  rewritePrompt: (query) => `Jsi expert na sociální služby.
-Převeď dotaz: "${query}" na 3-5 nejpřesnějších odborných termínů v češtině.
-POVINNÁ PRAVIDLA:
-1. Musíš zachovat původní podstatná jména (např. "vozík").
-2. Přidej konkrétní technický název (např. "mechanický vozík", "půjčovna kompenzačních pomůcek").
-3. ŽÁDNÉ OBECNÉ KATEGORIE.
-4. Výstupem budou pouze tato slova oddělená čárkou.`,
+  rewritePrompt: (query) => `Jsi expert na sociální služby a zdravotní péči v ČR.
+Převeď tento dotaz na přesné vyhledávací termíny v češtině: "${query}"
 
-  // PHASE 2: Expert Answer
+Pravidla:
+- Zachovej všechna podstatná slova z dotazu
+- Přidej relevantní synonyma a odborné termíny
+- Pokud je uvedeno město/organizace, zahrň je
+- Výstup: pouze klíčová slova a fráze oddělené čárkou, max 50 slov`,
+
   formatPrompt: (query, data) => {
-    const ctx = data.chunks.map((c, i) => `[${i+1}] NÁZEV: ${c.title}\nTEXT: ${c.text}`).join("\n\n");
-    return `KONTEXT Z DATABÁZE:
+    const ctx = data.chunks.map((c, i) =>
+      `[${i+1}] DOKUMENT: ${c.title}\nOBSAH: ${c.text}`
+    ).join("\n\n---\n\n");
+
+    return `Jsi expert na sociální služby, zdravotní péči a podporu osob se zdravotním postižením v ČR.
+
+KONTEXT Z DATABÁZE:
 ${ctx}
 
-OTÁZKA: ${query}
+DOTAZ UŽIVATELE: ${query}
 
 KRITICKÁ PRAVIDLA:
-1. Odpověz POUZE na základě poskytnutého kontextu. Pokud v něm odpověď není, napiš: "V databázi nejsou informace o tomto tématu."
-2. Používej konkrétní jména, adresy, telefony a částky.
-3. Pokud kontext obsahuje více možností, vypiš je všechny.
+1. Odpovídej POUZE podle poskytnutého kontextu
+2. Pokud kontext obsahuje tabulky/seznamy organizací, extrahuj VŠECHNY relevantní záznamy
+3. Pokud dotaz specifikuje město/region, filtruj výsledky podle lokace
+4. Používej konkrétní údaje: jména organizací, adresy, telefony, částky, termíny
+5. Pokud kontext neobsahuje odpověď, napiš: "V databázi nejsou informace o tomto tématu"
+6. Pokud existuje více variant/možností, vypiš je VŠECHNY
 
-FORMÁT ODPOVĚDI - JSON:
+FORMÁT ODPOVĚDI (JSON):
 {
-  "strucne": ["fakt 1", "fakt 2"],
-  "detaily": "Podrobná odpověď...",
-  "vice_informaci": "Podmínky/Varování...",
-  "pouzite_zdroje": [1, 2]
+  "strucne": ["hlavní fakt 1", "hlavní fakt 2", "hlavní fakt 3"],
+  "detaily": "Kompletní odpověď s konkrétními údaji, názvy organizací, kontakty, podmínkami. U tabulek/seznamů zahrň všechny relevantní položky.",
+  "vice_informaci": "Dodatečné podmínky, varování nebo doporučení pro uživatele.",
+  "pouzite_zdroje": [1, 2, 3]
 }`;
   }
 };
