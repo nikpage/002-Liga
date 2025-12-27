@@ -14,21 +14,22 @@ exports.handler = async (event) => {
 
     let content = aiResponse.candidates[0].content.parts[0].text;
     const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim();
-
-
     const parsed = JSON.parse(cleanJson);
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed)
+      body: JSON.stringify({
+        answer: parsed.detaily || "Bez odpovědi",
+        suggestions: []
+      })
     };
   } catch (err) {
     console.error("Function error:", err);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: err.message })
+      body: JSON.stringify({ answer: "Chyba: " + err.message })
     };
   }
 };
