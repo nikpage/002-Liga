@@ -7,27 +7,27 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // Get embedding and context
     const vector = await getEmb(query);
     const data = await getFullContext(vector);
-
-    // Build the prompt
     const prompt = formatPrompt(query, data);
 
-    // Call Google Gemini using chatModel from config.js
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
 
-    // CRITICAL FIX: Extract using Google's specific structure
-    const result = aiResponse.candidates[0].content.parts[0].text;
+    let content = aiResponse.candidates[0].content.parts[0].text;
+
+    const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim();
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: result
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
+      body: cleanJson
     };
   } catch (err) {
     return {
-      statusCode: 200, // Return 200 with error object so frontend can display it
+      statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ error: err.message })
     };
