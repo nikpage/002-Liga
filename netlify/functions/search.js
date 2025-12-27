@@ -7,34 +7,30 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // 1. Get query embedding
+    // 1. Get query embedding using text-embedding-004
     const vector = await getEmb(query);
 
-    // 2. Get data from Supabase
+    // 2. Fetch the 15 most relevant chunks from Supabase
     const data = await getFullContext(vector);
 
-    // 3. Format the prompt
+    // 3. Create the prompt with your JSON schema
     const prompt = formatPrompt(query, data);
 
-    // 4. Get Gemini answer using model from config
+    // 4. Get answer from gemini-2.0-flash-lite
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
 
-    // 5. THE FIX: Extract and sanitize the JSON text
+    // 5. Extract and clean the AI response
     let content = aiResponse.candidates[0].content.parts[0].text;
 
-    // This removes Markdown backticks that cause the "CHYBA SYSTÉMU" error
+    // This stops the "CHYBA SYSTÉMU" error by removing Markdown backticks
     const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim();
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
+      headers: { "Content-Type": "application/json" },
       body: cleanJson
     };
   } catch (err) {
-    console.error("Search Error:", err.message);
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
