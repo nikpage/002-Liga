@@ -7,33 +7,42 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // 1. Get embedding for the query using Google API
+    // 1. Get embedding
     const vector = await getEmb(query);
 
-    // 2. Fetch context from Supabase using the vector
+    // 2. Fetch context
     const data = await getFullContext(vector);
 
-    // 3. Format the prompt based on your specific JSON schema
+    // 3. Build the prompt
     const prompt = formatPrompt(query, data);
 
-    // 4. Generate the answer using the model specified in config.js
+    // 4. Get AI response using the centralized model
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
 
-    // 5. Extract the text response from the Google API structure
-    const result = aiResponse.candidates[0].content.parts[0].text;
+    // 5. Extract raw text
+    let content = aiResponse.candidates[0].content.parts[0].text;
+
+  
+    const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim();
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: result
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
+      body: cleanJson
     };
   } catch (err) {
-    // Log the error for Netlify debugging but return a clean error object
-    console.error("Search Error:", err.message);
+    console.error("Critical Failure:", err.message);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: err.message })
+      body: JSON.stringify({
+        error: "System Error",
+        message: err.message,
+        details: "Check Google API Quota or Supabase RPC permissions."
+      })
     };
   }
 };
