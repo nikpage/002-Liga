@@ -1,30 +1,25 @@
 function formatPrompt(query, data) {
-  // Simplifies the context so the AI doesn't get confused by metadata
-  const ctx = data.chunks.map((c, i) =>
-    `[Zdroj ${i+1}] ${c.title}: ${c.text}`
+  // 1. SAFEGUARD: If data is missing, don't crash, provide empty context
+  const chunks = (data && data.chunks) ? data.chunks : [];
+
+  const ctx = chunks.map((c, i) =>
+    `[Source ${i+1}] ${c.title || 'No Title'}: ${c.text || ''}`
   ).join("\n\n");
 
-  return `Jsi asistent, který odpovídá výhradně podle přiložených dokumentů.
+  // 2. THE RIGID PROMPT (Forces the AI into a corner)
+  return `Answer the question based ONLY on the context.
+Output MUST be a single JSON object. No markdown, no "json" tags, no text before or after.
 
-KONTEXT:
+CONTEXT:
 ${ctx}
 
-OTÁZKA: ${query}
+QUESTION: ${query}
 
-PRAVIDLA:
-1. Odpověz na základě kontextu. Pokud tam info je, MUSÍŠ ho použít.
-2. Buď konkrétní - vypiš jména, telefony, částky a adresy.
-3. Cituj zdroje pomocí [Zdroj X].
-4. Pokud v datech odpověď není, napiš "Informace nejsou v databázi".
-5. Odpověz VŽDY ve formátu JSON.
-
-FORMÁT ODPOVĚDI (JSON):
+JSON SCHEMA:
 {
-  "strucne": ["fakt 1", "fakt 2"],
-  "detaily": "Podrobná odpověď s citacemi [Zdroj X].",
-  "vice_informaci": "Další kroky nebo varování.",
-  "pouzite_zdroje": [1, 2]
+  "strucne": ["fact"],
+  "detaily": "full answer",
+  "vice_informaci": "extra info",
+  "pouzite_zdroje": [1]
 }`;
 }
-
-module.exports = { formatPrompt };
