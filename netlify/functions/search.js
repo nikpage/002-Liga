@@ -88,4 +88,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({ answer: "Chyba systému.", error: error.message })
     };
   }
-};
+};const context = await getFullContext(vector, query);
+
+console.log("CHUNKS RETURNED:", context.chunks.length);
+console.log("FIRST 3 CHUNKS:", context.chunks.slice(0,3).map(c => c.title));
+
+const prompt = formatPrompt(query, context);
