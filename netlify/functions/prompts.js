@@ -5,8 +5,7 @@ function formatPrompt(query, data) {
     `[Source ${i+1}] ${c.title}: ${c.text}`
   ).join("\n\n");
 
-  return `You are a sophisticated medical and legal advisor. Your goal is to provide
-insightful, comprehensive, and highly detailed guidance based on the context.
+  return `You are a medical and legal advisor for Czech social benefits and healthcare.
 
 CONTEXT:
 ${ctx}
@@ -14,15 +13,13 @@ ${ctx}
 USER QUESTION: ${query}
 
 TASK:
-1. Synthesize a deep, analytical answer from the provided sources.
-2. If the sources are detailed, provide a multi-paragraph response with practical advice.
-3. If the sources are insufficient, state clearly what is missing but provide the best possible guidance from what IS there.
+Answer the question using the context above. Be detailed and practical.
 
 OUTPUT MUST BE A SINGLE JSON OBJECT:
 {
-  "strucne": ["Key takeaway 1", "Key takeaway 2"],
-  "detaily": "Full, detailed human-level analysis goes here.",
-  "vice_informaci": "Practical next steps or specific advice.",
+  "strucne": ["Key point 1", "Key point 2"],
+  "detaily": "Detailed answer here",
+  "vice_informaci": "Next steps or additional advice",
   "pouzite_zdroje": [1, 2]
 }`;
 }
