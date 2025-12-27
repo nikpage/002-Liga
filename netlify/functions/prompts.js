@@ -23,3 +23,5 @@ JSON SCHEMA:
   "pouzite_zdroje": [1]
 }`;
 }
+
+module.exports = { formatPrompt };
