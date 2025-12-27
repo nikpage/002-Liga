@@ -23,15 +23,15 @@ exports.handler = async (event) => {
     const { query, history = [], model = "gemini-2.0-flash-lite" } = JSON.parse(event.body || "{}");
     if (!query) return { statusCode: 400, body: JSON.stringify({ error: "No query" }) };
 
-    // 1. TRANSLATE TYPOS/ROUGH INPUT TO EXPERT TERMS
     const rewriteResult = await getAnswer(model, [], rewritePrompt(query));
     const expertQuery = rewriteResult.candidates[0].content.parts[0].text.trim();
 
-    // 2. SEARCH DATABASE USING EXPERT TERMS
     const vector = await getEmb(expertQuery);
     const context = await getFullContext(vector, query);
 
-    // 3. GENERATE FINAL RESPONSE
+    console.log("CHUNKS RETURNED:", context.chunks.length);
+    console.log("FIRST 3 CHUNKS:", context.chunks.slice(0,3).map(c => c.title));
+
     const prompt = formatPrompt(query, context);
     const aiResponse = await getAnswer(model, history, prompt);
 
@@ -88,9 +88,4 @@ exports.handler = async (event) => {
       body: JSON.stringify({ answer: "Chyba systému.", error: error.message })
     };
   }
-};const context = await getFullContext(vector, query);
-
-console.log("CHUNKS RETURNED:", context.chunks.length);
-console.log("FIRST 3 CHUNKS:", context.chunks.slice(0,3).map(c => c.title));
-
-const prompt = formatPrompt(query, context);
+};
