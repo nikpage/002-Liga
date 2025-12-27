@@ -1,12 +1,21 @@
 exports.handler = async (event) => {
+  // 1. Log the start immediately to kill the "silent" aspect
+  console.log("Function started. Event body:", event.body);
+
   try {
-    // 1. Parse the request from your frontend
     const { query, data } = JSON.parse(event.body);
 
-    // 2. Prepare the data for the AI
+    // Safety check for data structure
+    if (!data || !data.chunks) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ strucne: ["No data"], detaily: "Database chunks missing." })
+      };
+    }
+
     const ctx = data.chunks.map((c, i) => `[ID ${i+1}] ${c.text}`).join("\n\n");
 
-    // 3. Use the built-in 'fetch' (No axios, no installation needed)
+    // 2. Use native fetch (No axios b*******)
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -15,15 +24,13 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        messages: [
-          { role: "system", content: "Return ONLY valid JSON." },
-          { role: "user", content: `Context:\n${ctx}\n\nQuestion: ${query}` }
-        ],
+        messages: [{ role: "user", content: `Context: ${ctx}\n\nQuery: ${query}` }],
         response_format: { type: "json_object" }
       })
     });
 
     const result = await response.json();
+    console.log("AI result received.");
 
     return {
       statusCode: 200,
@@ -32,15 +39,14 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    // 4. Global safety net to keep the site from going down
+    // 3. Force a log of the error so it isn't silent anymore
+    console.error("CRITICAL ERROR:", error);
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        strucne: ["Error"],
-        detaily: error.message,
-        vice_informaci: "Check your OPENAI_API_KEY in Netlify settings.",
-        pouzite_zdroje: []
+        strucne: ["System Error"],
+        detaily: error.message
       })
     };
   }
