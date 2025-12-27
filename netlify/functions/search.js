@@ -7,42 +7,29 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // 1. Get embedding
+    // Get embedding and context
     const vector = await getEmb(query);
-
-    // 2. Fetch context
     const data = await getFullContext(vector);
 
-    // 3. Build the prompt
+    // Build the prompt
     const prompt = formatPrompt(query, data);
 
-    // 4. Get AI response using the centralized model
+    // Call Google Gemini using chatModel from config.js
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
 
-    // 5. Extract raw text
-    let content = aiResponse.candidates[0].content.parts[0].text;
-
-  
-    const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim();
+    // CRITICAL FIX: Extract using Google's specific structure
+    const result = aiResponse.candidates[0].content.parts[0].text;
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
-      body: cleanJson
+      headers: { "Content-Type": "application/json" },
+      body: result
     };
   } catch (err) {
-    console.error("Critical Failure:", err.message);
     return {
-      statusCode: 500,
+      statusCode: 200, // Return 200 with error object so frontend can display it
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        error: "System Error",
-        message: err.message,
-        details: "Check Google API Quota or Supabase RPC permissions."
-      })
+      body: JSON.stringify({ error: err.message })
     };
   }
 };
