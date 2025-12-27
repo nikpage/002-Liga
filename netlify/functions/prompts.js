@@ -21,5 +21,4 @@ JSON SCHEMA:
 }`;
 }
 
-// THIS MUST BE HERE
 module.exports = { formatPrompt };
