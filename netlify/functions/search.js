@@ -31,7 +31,10 @@ exports.handler = async (event) => {
     const seenUrls = new Set();
 
     data.chunks.forEach(chunk => {
-      const absoluteUrl = chunk.url;
+      let absoluteUrl = chunk.url;
+      if (!absoluteUrl.startsWith('http')) {
+        absoluteUrl = `http://test.ligaportal.cz/${absoluteUrl.replace(/^\//, '')}`;
+      }
 
       if (!seenUrls.has(absoluteUrl)) {
         seenUrls.add(absoluteUrl);
@@ -48,8 +51,15 @@ exports.handler = async (event) => {
     });
 
     let formattedResponse = `### 💡 Stručné shrnutí\n${parsed.strucne}\n\n`;
-    if (parsed.detaily) formattedResponse += `### 🔍 Podrobnosti\n${parsed.detaily}\n\n`;
-    if (parsed.sirsí_souvislosti) formattedResponse += `### 💡 Mohlo by vás zajímat\n${parsed.sirsí_souvislosti}\n\n`;
+
+    const hasData = parsed.detaily && parsed.detaily.length > 5;
+
+    if (hasData) {
+      formattedResponse += `### 🔍 Podrobnosti\n${parsed.detaily}\n\n`;
+      if (parsed.sirsí_souvislosti && parsed.sirsí_souvislosti.length > 5) {
+        formattedResponse += `### 💡 Mohlo by vás zajímat\n${parsed.sirsí_souvislosti}\n\n`;
+      }
+    }
 
     if (uniqueSources.length > 0) {
       formattedResponse += `--- \n### 📄 Použité zdroje\n`;
