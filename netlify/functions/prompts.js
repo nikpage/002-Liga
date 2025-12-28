@@ -12,6 +12,8 @@ DETAILED EXTRACTION RULES:
 - If the context mentions a numeric limit (days, money, percentages), you MUST include it.
 - Use Czech language at a 6th-9th grade reading level.
 - Be precise. If the context says "půjčovné 50 Kč/den", do not just say "je tam poplatek", say "poplatek je 50 Kč za den".
+- PŘÍSNÉ PRAVIDLO NULOVÝCH ZNALOSTÍ: Používej POUZE poskytnutý kontext. Pokud odpověď není v kontextu, nepoužívej externí znalosti.
+- PROTOKOL PRÁZDNÉHO POLE: Pokud v kontextu nenajdeš konkrétní odpověď, nastav "strucne" na "Bohužel pro tento dotaz nemám v dokumentaci dostatek konkrétních informací." a "detaily" a "sirsí_souvislosti" nastav na null.
 
 CONTEXT:
 ${ctx}
