@@ -7,20 +7,32 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // Use the original query directly - no expansion
+    // Use the original query directly
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
 
     const prompt = formatPrompt(query, data);
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
     const content = aiResponse.candidates[0].content.parts[0].text;
-    const parsed = JSON.parse(content.replace(/```json/g, "").replace(/```/g, "").trim());
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content.replace(/```json/g, "").replace(/```/g, "").trim());
+    } catch (parseError) {
+      console.error("JSON parse failed:", parseError);
+      console.error("Raw content:", content);
+      // Fallback response
+      parsed = {
+        strucne: "Omlouváme se, došlo k chybě při zpracování odpovědi.",
+        detaily: null,
+        sirsí_souvislosti: null
+      };
+    }
 
     const uniqueSources = [];
     const seenUrls = new Set();
 
     data.chunks.forEach(chunk => {
-      // Uses the real link from the database
       let absoluteUrl = chunk.url;
 
       if (!absoluteUrl.startsWith('http')) {
@@ -41,7 +53,9 @@ exports.handler = async (event) => {
       }
     });
 
-    let formattedResponse = `### 💡 Stručné shrnutí\n${parsed.strucne}\n\n`;
+    // Safe access to parsed fields
+    const strucne = parsed.strucne || "Bohužel nemám k dispozici odpověď na tento dotaz.";
+    let formattedResponse = `### 💡 Stručné shrnutí\n${strucne}\n\n`;
 
     const hasData = parsed.detaily && parsed.detaily.length > 5;
 
@@ -54,7 +68,6 @@ exports.handler = async (event) => {
 
     if (uniqueSources.length > 0) {
       formattedResponse += `--- \n### 📄 Použité zdroje\n`;
-      // Link text is the title of the document, linked to the real document URL
       uniqueSources.forEach(s => formattedResponse += `- [${s.titulek}](${s.url})\n`);
     }
 
@@ -64,6 +77,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ answer: formattedResponse, metadata: { sources: uniqueSources } })
     };
   } catch (err) {
+    console.error("Handler error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ answer: "Chyba: " + err.message })
