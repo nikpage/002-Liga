@@ -5,16 +5,18 @@ const supabase = createClient(cfg.url, cfg.key);
 
 async function getFullContext(vector, query) {
   try {
-    const { data, error } = await supabase.rpc('match_chunks', {
+
+    const { data, error } = await supabase.rpc('match_document_chunks', {
       query_embedding: vector,
       match_threshold: 0.45,
-      match_count: 8
+      match_count: 10
     });
 
     if (error) throw error;
 
     const chunks = data.map(row => ({
-      text: row.parent_content || row.content,  // Use parent for context, fallback to content
+
+      text: row.content,
       title: row.document_title,
       url: row.source_url
     }));
