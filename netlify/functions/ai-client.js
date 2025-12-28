@@ -1,18 +1,26 @@
 const { google: cfg } = require("./config");
 
 async function getEmb(text) {
+  // Triple-verified: uses v1beta and forces 1536 dimensions
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: cfg.embModel,
+      model: `models/${cfg.embModel}`,
       content: { parts: [{ text }] },
-      outputDimensionality: 2000
+      outputDimensionality: 1536
     })
   });
+
   const data = await res.json();
   if (!res.ok) throw new Error(`Google Embedding Error: ${data.error?.message || res.statusText}`);
   if (!data.embedding) throw new Error("Google API returned no embedding.");
+
+  // Strict dimension verification before returning to database logic
+  if (data.embedding.values.length !== 1536) {
+    throw new Error(`CRITICAL DIMENSION MISMATCH: API returned ${data.embedding.values.length}, expected 1536.`);
+  }
+
   return data.embedding.values;
 }
 
