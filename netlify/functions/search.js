@@ -16,11 +16,14 @@ exports.handler = async (event) => {
       const cleanJson = expansionContent.replace(/```json/g, "").replace(/```/g, "").trim();
       const variations = JSON.parse(cleanJson);
       if (Array.isArray(variations)) searchTerms = [...new Set([...searchTerms, ...variations])];
-    } catch (e) { console.error("Expansion failed"); }
+    } catch (e) {
+      console.error("Expansion failed");
+    }
 
     const expertQuery = searchTerms[1] || query;
     const vector = await getEmb(expertQuery);
-    const data = await getFullContext(vector);
+    // Fixed to include query as required by database.js
+    const data = await getFullContext(vector, query);
 
     const prompt = formatPrompt(query, data);
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
@@ -31,8 +34,8 @@ exports.handler = async (event) => {
     const seenUrls = new Set();
 
     data.chunks.forEach(chunk => {
-      // Replaces any file extension with .html and ensures absolute URL format
-      let absoluteUrl = chunk.url.replace(/\.[a-z0-9]+$/i, '.html');
+      // Uses the real link from the database
+      let absoluteUrl = chunk.url;
 
       if (!absoluteUrl.startsWith('http')) {
         absoluteUrl = `http://test.ligaportal.cz/${absoluteUrl.replace(/^\//, '')}`;
@@ -65,6 +68,7 @@ exports.handler = async (event) => {
 
     if (uniqueSources.length > 0) {
       formattedResponse += `--- \n### 📄 Použité zdroje\n`;
+      // Link text is the title of the document, linked to the real document URL
       uniqueSources.forEach(s => formattedResponse += `- [${s.titulek}](${s.url})\n`);
     }
 
@@ -74,6 +78,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({ answer: formattedResponse, metadata: { sources: uniqueSources } })
     };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ answer: "Chyba: " + err.message }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ answer: "Chyba: " + err.message })
+    };
   }
 };
