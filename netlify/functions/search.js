@@ -30,17 +30,27 @@ exports.handler = async (event) => {
     const content = aiResponse.candidates[0].content.parts[0].text;
     const parsed = JSON.parse(content.replace(/```json/g, "").replace(/```/g, "").trim());
 
-    // 4. DEDUPLICATE AND FORMAT SOURCES
+    // 4. DEDUPLICATE AND FORMAT SOURCES (ABSOLUTE LINKS)
     const uniqueSources = [];
     const seenUrls = new Set();
 
-    // Map database chunks to formatted sources
     data.chunks.forEach(chunk => {
-      if (!seenUrls.has(chunk.url)) {
-        seenUrls.add(chunk.url);
-        // Capitalize titles correctly (replaces hyphens with spaces)
-        const displayTitle = chunk.title.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        uniqueSources.push({ titulek: displayTitle, url: chunk.url });
+      // Ensure we have a valid absolute URL. If the DB has a relative path, we won't use it.
+      const absoluteUrl = chunk.url.startsWith('http')
+        ? chunk.url
+        : `http://test.ligaportal.cz/${chunk.url.replace(/^\//, '')}`;
+
+      if (!seenUrls.has(absoluteUrl)) {
+        seenUrls.add(absoluteUrl);
+
+        // Capitalize titles correctly: "budu-nastupovat" -> "Budu Nastupovat"
+        const displayTitle = chunk.title
+          .replace(/-/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
+        uniqueSources.push({ titulek: displayTitle, url: absoluteUrl });
       }
     });
 
