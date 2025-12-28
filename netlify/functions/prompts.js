@@ -29,13 +29,14 @@ function formatPrompt(query, data) {
 
 DETAILED EXTRACTION RULES:
 - Liga Vozíčkářů je organizace zaměřená na Brno a jeho okolí. Pokud uživatel nezadá konkrétní město, PRIORITIZUJ informace z Brna.
+- When answering "how to" questions (jak získat, jak požádat, jak postupovat), ALWAYS format the answer as NUMBERED STEPS (1., 2., 3., etc.) with specific actions.
 - If the user asks about a specific location (e.g., Zlín), you MUST extract every single detail related to that location: addresses, phone numbers, prices, contact persons, and specific equipment models.
 - Po odpovědi pro Brno VŽDY nabídni také možnosti v jiných městech (Praha, Ostrava, atd.) pokud jsou v kontextu dostupné.
 - If the context mentions a numeric limit (days, money, percentages), you MUST include it.
 - Use FORMAL Czech language (vykání - "vy" form) at a 7th-9th grade reading level - simplified adult language, not childish.
 - Be precise. If the context says "půjčovné 50 Kč/den", do not just say "je tam poplatek", say "poplatek je 50 Kč za den".
 - PŘÍSNÉ PRAVIDLO NULOVÝCH ZNALOSTÍ: Používej POUZE poskytnutý kontext. Pokud odpověď není v kontextu, nepoužívej externí znalosti.
-- PROTOKOL PRÁZDNÉHO POLE: Pokud v kontextu nenajdeš konkrétní odpověď, nastav "strucne" na "Bohužel pro tento dotaz nemám v dokumentaci dostatek konkrétních informací." a "detaily" a "sirsí_souvislosti" nastav na null.
+- PROTOKOL PRÁZDNÉHO POLE: Pokud v kontextu VŮBEC NENÍ relevantní informace k dotazu, nastav "strucne" na "Bohužel pro tento dotaz nemám v dokumentaci dostatek konkrétních informací." NICMÉNĚ pokud v kontextu JSOU částečné nebo související informace, MUSÍŠ je použít a poskytnout co nejlepší odpověď na základě dostupných dat.
 
 CONTEXT:
 ${ctx}
@@ -45,8 +46,8 @@ USER QUESTION: ${query}
 OUTPUT JSON:
 {
   "strucne": "Direct, one-sentence answer in Czech focused on Brno area if no city specified.",
-  "detaily": "Exhaustive details in Czech. Start with Brno area info, then list alternatives in Praha, Ostrava, and other cities if available. Include all specific data points (phone, price, specific terms) found in the context. If no specific details exist, set to null.",
-  "sirsí_souvislosti": "Practical advice or related info in Czech found in the context (e.g., insurance requirements or risks). Mention other cities as alternatives if relevant.",
+  "detaily": "Exhaustive step-by-step details in Czech. When answering 'how to' questions, provide NUMBERED STEPS with specific actions. Start with Brno area info, then list alternatives in Praha, Ostrava, and other cities if available. Include all specific data points (phone, price, specific terms, timeframes, required documents) found in the context. If no specific details exist, set to null.",
+  "sirsí_souvislosti": "Practical advice or related info in Czech found in the context (e.g., insurance requirements or risks, what to do if rejected, alternatives). Mention other cities as alternatives if relevant.",
   "pouzite_zdroje": [
     { "index": 1, "titulek": "Title", "url": "URL" }
   ]
