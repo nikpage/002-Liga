@@ -7,19 +7,9 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // Primary vector search uses the direct user query for maximum accuracy
+    // Use the original query directly - no expansion
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-
-    // If no data found, attempt a secondary search using an expanded term
-    if (data.chunks.length === 0) {
-       const expansionPrompt = `Jsi expert na české sociální systémy. Na základě dotazu: "${query}" vygeneruj 1 odbornou vyhledávací frázi. ODPOVĚZ POUZE JAKO STRING.`;
-       const expansionRes = await getAnswer(cfg.chatModel, [], expansionPrompt);
-       const expandedQuery = expansionRes.candidates[0].content.parts[0].text.trim();
-       const fallbackVector = await getEmb(expandedQuery);
-       const fallbackData = await getFullContext(fallbackVector, query);
-       Object.assign(data, fallbackData);
-    }
 
     const prompt = formatPrompt(query, data);
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
@@ -30,24 +20,41 @@ exports.handler = async (event) => {
     const seenUrls = new Set();
 
     data.chunks.forEach(chunk => {
-      let absoluteUrl = chunk.url || "";
-      if (absoluteUrl && !absoluteUrl.startsWith('http')) {
+      // Uses the real link from the database
+      let absoluteUrl = chunk.url;
+
+      if (!absoluteUrl.startsWith('http')) {
         absoluteUrl = `http://test.ligaportal.cz/${absoluteUrl.replace(/^\//, '')}`;
       }
 
-      if (absoluteUrl && !seenUrls.has(absoluteUrl)) {
+      if (!seenUrls.has(absoluteUrl)) {
         seenUrls.add(absoluteUrl);
-        const displayTitle = chunk.title.replace(/\.[^/.]+$/, "").replace(/-/g, ' ');
+
+        const displayTitle = chunk.title
+          .replace(/\.(md|json|doc|docx|pdf)$/i, '')
+          .replace(/-/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
         uniqueSources.push({ titulek: displayTitle, url: absoluteUrl });
       }
     });
 
     let formattedResponse = `### 💡 Stručné shrnutí\n${parsed.strucne}\n\n`;
-    if (parsed.detaily) formattedResponse += `### 🔍 Podrobnosti\n${parsed.detaily}\n\n`;
-    if (parsed.sirsí_souvislosti) formattedResponse += `### 💡 Souvislosti\n${parsed.sirsí_souvislosti}\n\n`;
+
+    const hasData = parsed.detaily && parsed.detaily.length > 5;
+
+    if (hasData) {
+      formattedResponse += `### 🔍 Podrobnosti\n${parsed.detaily}\n\n`;
+      if (parsed.sirsí_souvislosti && parsed.sirsí_souvislosti.length > 5) {
+        formattedResponse += `### 💡 Mohlo by vás zajímat\n${parsed.sirsí_souvislosti}\n\n`;
+      }
+    }
 
     if (uniqueSources.length > 0) {
       formattedResponse += `--- \n### 📄 Použité zdroje\n`;
+      // Link text is the title of the document, linked to the real document URL
       uniqueSources.forEach(s => formattedResponse += `- [${s.titulek}](${s.url})\n`);
     }
 
@@ -59,7 +66,7 @@ exports.handler = async (event) => {
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ answer: "Chyba systému: " + err.message })
+      body: JSON.stringify({ answer: "Chyba: " + err.message })
     };
   }
 };
