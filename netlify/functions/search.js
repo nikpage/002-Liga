@@ -31,7 +31,9 @@ exports.handler = async (event) => {
     const seenUrls = new Set();
 
     data.chunks.forEach(chunk => {
-      let absoluteUrl = chunk.url;
+      // Replaces any file extension with .html and ensures absolute URL format
+      let absoluteUrl = chunk.url.replace(/\.[a-z0-9]+$/i, '.html');
+
       if (!absoluteUrl.startsWith('http')) {
         absoluteUrl = `http://test.ligaportal.cz/${absoluteUrl.replace(/^\//, '')}`;
       }
