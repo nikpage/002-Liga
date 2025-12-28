@@ -1,36 +1,54 @@
 function formatPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
 
-  const ctx = chunks.map((c, i) =>
-    `[Source ${i+1}] Title: ${c.title} | URL: ${c.url || 'No URL'} | Content: ${c.text}`
-  ).join("\n\n");
+  const ctx = chunks.map((c, i) => {
+    let content = c.text;
 
-  return `You are a world-class legal and social advisor for Liga Vozíčkářů. You must provide a human-expert level response in Czech.
+    // Try to parse JSON content and make it human-readable
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.entity && parsed.municipality) {
+        // It's structured data about rental organizations
+        let readable = `Organizace: ${parsed.entity}, Město: ${parsed.municipality}`;
 
-DETAILED EXTRACTION RULES:
-- If the user asks about a specific location (e.g., Zlín), you MUST extract every single detail related to that location: addresses, phone numbers, prices, contact persons, and specific equipment models.
-- If the context mentions a numeric limit (days, money, percentages), you MUST include it.
-- Use Czech language at a 6th-9th grade reading level.
-- Be precise. If the context says "půjčovné 50 Kč/den", do not just say "je tam poplatek", say "poplatek je 50 Kč za den".
-- PŘÍSNÉ PRAVIDLO NULOVÝCH ZNALOSTÍ: Používej POUZE poskytnutý kontext. Pokud odpověď není v kontextu, nepoužívej externí znalosti.
-- PROTOKOL PRÁZDNÉHO POLE: Pokud v kontextu nenajdeš konkrétní odpověď, nastav "strucne" na "Bohužel pro tento dotaz nemám v dokumentaci dostatek konkrétních informací." a "detaily" a "sirsí_souvislosti" nastav na null.
+        if (parsed.features && Array.isArray(parsed.features)) {
+          readable += `, Dostupné pomůcky: ${parsed.features.join(', ')}`;
+        }
 
-CONTEXT:
+        if (parsed.address) readable += `, Adresa: ${parsed.address}`;
+        if (parsed.phone) readable += `, Telefon: ${parsed.phone}`;
+        if (parsed.email) readable += `, Email: ${parsed.email}`;
+        if (parsed.note) readable += `, Poznámka: ${parsed.note}`;
+
+        content = readable;
+      }
+    } catch (e) {
+      // Not JSON or parsing failed, keep original text
+    }
+
+    return `[Zdroj ${i+1}] ${c.title}\n${content}`;
+  }).join("\n\n");
+
+  return `Jsi expertní poradce pro Ligu Vozíčkářů. Odpovídáš POUZE v češtině.
+
+PRAVIDLA:
+- Používej POUZE informace z kontextu níže
+- Pokud se ptají na konkrétní město, vyjmenuj VŠECHNY organizace v tom městě
+- Uveď všechny dostupné pomůcky, adresy, telefony
+- Pokud informace chybí, řekni přesně co chybí
+- Pokud kontext neobsahuje odpověď, nastav "strucne" na "Bohužel pro tento dotaz nemám informace v databázi."
+
+KONTEXT:
 ${ctx}
 
-USER QUESTION: ${query}
+DOTAZ: ${query}
 
-OUTPUT JSON:
+ODPOVĚZ VE FORMÁTU JSON:
 {
-  "strucne": "Direct, one-sentence answer in Czech.",
-  "detaily": "Exhaustive details in Czech. Include all specific data points (phone, price, specific terms) found in the context. If no specific details exist, set to null.",
-  "sirsí_souvislosti": "Practical advice or related info in Czech found in the context (e.g., insurance requirements or risks).",
-  "pouzite_zdroje": [
-    { "index": 1, "titulek": "Title", "url": "URL" }
-  ]
-}
-
-CRITICAL: If the context is too vague to answer specifically, say exactly what information is missing.`;
+  "strucne": "Jedna věta shrnutí v češtině",
+  "detaily": "Detailní odpověď se všemi kontakty, adresami, pomůckami. Pokud není co uvést, null.",
+  "sirsí_souvislosti": "Další užitečné informace z kontextu. Pokud nejsou, null."
+}`;
 }
 
 module.exports = { formatPrompt };
