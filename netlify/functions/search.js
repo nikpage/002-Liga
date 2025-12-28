@@ -7,7 +7,6 @@ exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
 
-    // 1. RE-QUERYING: Translates amateur query to expert terms
     const expansionPrompt = `Jsi expert na české sociální systémy. Na základě dotazu: "${query}" vygeneruj 3 vysoce odborné vyhledávací fráze v češtině. ODPOVĚZ POUZE JAKO JSON POLE.`;
     const expansionRes = await getAnswer(cfg.chatModel, [], expansionPrompt);
     let searchTerms = [query];
@@ -19,32 +18,26 @@ exports.handler = async (event) => {
       if (Array.isArray(variations)) searchTerms = [...new Set([...searchTerms, ...variations])];
     } catch (e) { console.error("Expansion failed"); }
 
-    // 2. RETRIEVAL: Pulling precise 1000-char segments
     const expertQuery = searchTerms[1] || query;
     const vector = await getEmb(expertQuery);
     const data = await getFullContext(vector);
 
-    // 3. ANSWER GENERATION
     const prompt = formatPrompt(query, data);
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
     const content = aiResponse.candidates[0].content.parts[0].text;
     const parsed = JSON.parse(content.replace(/```json/g, "").replace(/```/g, "").trim());
 
-    // 4. DEDUPLICATE AND FORMAT SOURCES (ABSOLUTE LINKS)
     const uniqueSources = [];
     const seenUrls = new Set();
 
     data.chunks.forEach(chunk => {
-      // Ensure we have a valid absolute URL. If the DB has a relative path, we won't use it.
-      const absoluteUrl = chunk.url.startsWith('http')
-        ? chunk.url
-        : `http://test.ligaportal.cz/${chunk.url.replace(/^\//, '')}`;
+      const absoluteUrl = chunk.url;
 
       if (!seenUrls.has(absoluteUrl)) {
         seenUrls.add(absoluteUrl);
 
-        // Capitalize titles correctly: "budu-nastupovat" -> "Budu Nastupovat"
         const displayTitle = chunk.title
+          .replace(/\.(md|json|doc|docx|pdf)$/i, '')
           .replace(/-/g, ' ')
           .split(' ')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -54,7 +47,6 @@ exports.handler = async (event) => {
       }
     });
 
-    // 5. FINAL UI ASSEMBLY
     let formattedResponse = `### 💡 Stručné shrnutí\n${parsed.strucne}\n\n`;
     if (parsed.detaily) formattedResponse += `### 🔍 Podrobnosti\n${parsed.detaily}\n\n`;
     if (parsed.sirsí_souvislosti) formattedResponse += `### 💡 Mohlo by vás zajímat\n${parsed.sirsí_souvislosti}\n\n`;
