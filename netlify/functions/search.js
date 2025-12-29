@@ -11,6 +11,12 @@ exports.handler = async (event) => {
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
 
+    console.log("=== RETRIEVED CHUNKS ===");
+    console.log(`Total chunks found: ${data.chunks.length}`);
+    data.chunks.forEach((chunk, i) => {
+      console.log(`[${i+1}] ${chunk.title}`);
+    });
+
     const prompt = formatPrompt(query, data);
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
     const content = aiResponse.candidates[0].content.parts[0].text;
@@ -23,35 +29,68 @@ exports.handler = async (event) => {
       console.error("Raw content:", content);
       // Fallback response
       parsed = {
+        pouzite_zdroje: [],
+        nevyuzite_zdroje: [],
+        vytezene_fakty: {},
         strucne: "Omlouváme se, došlo k chybě při zpracování odpovědi.",
         detaily: null,
         sirsí_souvislosti: null
       };
     }
 
+    console.log("=== AI EXTRACTION ===");
+    console.log("Used sources:", parsed.pouzite_zdroje?.length || 0);
+    console.log("Unused sources:", parsed.nevyuzite_zdroje?.length || 0);
+    console.log("Extracted facts:", JSON.stringify(parsed.vytezene_fakty, null, 2));
+
+    // Validation: check if extracted facts appear in answer
+    if (parsed.vytezene_fakty) {
+      const detaily = parsed.detaily || "";
+      const missing = [];
+
+      if (parsed.vytezene_fakty.dodavatele) {
+        parsed.vytezene_fakty.dodavatele.forEach(d => {
+          if (!detaily.includes(d)) missing.push(`dodavatel: ${d}`);
+        });
+      }
+
+      if (parsed.vytezene_fakty.lekari) {
+        parsed.vytezene_fakty.lekari.forEach(l => {
+          if (!detaily.includes(l)) missing.push(`lékař: ${l}`);
+        });
+      }
+
+      if (missing.length > 0) {
+        console.warn("⚠️ VALIDATION FAILED: Extracted facts not in answer:", missing);
+      } else {
+        console.log("✓ Validation passed: All extracted facts appear in answer");
+      }
+    }
+
+    // Build source list from ONLY pouzite_zdroje
     const uniqueSources = [];
     const seenUrls = new Set();
 
-    data.chunks.forEach(chunk => {
-      let absoluteUrl = chunk.url;
+    if (parsed.pouzite_zdroje && Array.isArray(parsed.pouzite_zdroje)) {
+      parsed.pouzite_zdroje.forEach(source => {
+        if (source.url && !seenUrls.has(source.url)) {
+          seenUrls.add(source.url);
 
-      if (!absoluteUrl.startsWith('http')) {
-        absoluteUrl = `http://test.ligaportal.cz/${absoluteUrl.replace(/^\//, '')}`;
-      }
+          const displayTitle = source.title
+            .replace(/\.(md|json|doc|docx|pdf)$/i, '')
+            .replace(/-/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
 
-      if (!seenUrls.has(absoluteUrl)) {
-        seenUrls.add(absoluteUrl);
+          uniqueSources.push({ titulek: displayTitle, url: source.url });
+        }
+      });
+    }
 
-        const displayTitle = chunk.title
-          .replace(/\.(md|json|doc|docx|pdf)$/i, '')
-          .replace(/-/g, ' ')
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-
-        uniqueSources.push({ titulek: displayTitle, url: absoluteUrl });
-      }
-    });
+    console.log("=== FINAL SOURCES ===");
+    console.log(`Sources in response: ${uniqueSources.length}`);
+    uniqueSources.forEach(s => console.log(`- ${s.titulek}`));
 
     // Safe access to parsed fields
     const strucne = parsed.strucne || "Bohužel nemám k dispozici odpověď na tento dotaz.";
