@@ -32,19 +32,9 @@ exports.handler = async (event) => {
 
     const result = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
 
-    // Validate: If vytěžené_fakty has data, answer MUST have data
+    // Log extracted facts for debugging
     if (result.vytěžené_fakty) {
-      const hasFacts = Object.values(result.vytěžené_fakty).some(arr => Array.isArray(arr) && arr.length > 0);
-      if (hasFacts) {
-        if (!result.detaily || result.detaily.length < 20 || result.detaily.includes("nemám") || result.detaily.includes("nejsou")) {
-          console.error("VALIDATION FAILED: Has facts but answer is generic");
-          return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({ answer: "Chyba: Systém nenašel dostatečně konkrétní informace." })
-          };
-        }
-      }
+      console.log("Extracted facts:", JSON.stringify(result.vytěžené_fakty));
     }
 
     const uniqueSources = [];
