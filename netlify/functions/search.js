@@ -21,12 +21,16 @@ exports.handler = async (event) => {
     const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
     const content = aiResponse.candidates[0].content.parts[0].text;
 
+    console.log("=== RAW AI RESPONSE ===");
+    console.log(content);
+    console.log("=== END RAW RESPONSE ===");
+
     let parsed;
     try {
       parsed = JSON.parse(content.replace(/```json/g, "").replace(/```/g, "").trim());
     } catch (parseError) {
-      console.error("JSON parse failed:", parseError);
-      console.error("Raw content:", content);
+      console.error("❌ JSON PARSE FAILED:", parseError.message);
+      console.error("Raw content that failed:", content.substring(0, 500));
       // Fallback response
       parsed = {
         pouzite_zdroje: [],
@@ -116,7 +120,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({ answer: formattedResponse, metadata: { sources: uniqueSources } })
     };
   } catch (err) {
-    console.error("Handler error:", err);
+    console.error("❌ HANDLER ERROR:", err);
+    console.error("Stack:", err.stack);
     return {
       statusCode: 500,
       body: JSON.stringify({ answer: "Chyba: " + err.message })
