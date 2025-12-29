@@ -1,8 +1,7 @@
-function formatPrompt(query, data) {
+function buildExtractionPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
     let content = c.text;
-    // Parse JSON if present
     try {
       const parsed = JSON.parse(content);
       if (parsed.entity && parsed.municipality) {
@@ -16,9 +15,7 @@ function formatPrompt(query, data) {
         if (parsed.note) readable += `, Poznámka: ${parsed.note}`;
         content = readable;
       }
-    } catch (e) {
-      // Keep original
-    }
+    } catch (e) {}
     return `[Source ${i+1}] Title: ${c.title} | URL: ${c.url || 'No URL'} | Content: ${content}`;
   }).join("\n\n");
 
@@ -147,7 +144,7 @@ COPY ALL ITEMS EXAMPLES:
 CRITICAL VALIDATION:
 - If vytěžené_fakty has ANY non-empty arrays, strucne and detaily CANNOT be empty or say "nemám informace"
 - detaily must be plain Czech text, NOT nested JSON structure
-- ALL facts from vytěžené_fakty MUST appear in detaily`;
+- ALL facts from vytěžené_fakty MUST appear in detaily\`;
 }
 
-module.exports = { formatPrompt };
+module.exports = { buildExtractionPrompt };
