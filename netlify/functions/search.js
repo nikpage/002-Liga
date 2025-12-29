@@ -2,7 +2,7 @@ const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext } = require('./database');
 const { google: cfg } = require('./config');
 
-// Function definitions for buildExtractionPrompt are moved here to en sure they are found
+// Function definitions for buildExtractionPrompt are moved here to ensure they are found
 function buildExtractionPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
@@ -166,18 +166,24 @@ exports.handler = async (event) => {
 
   try {
     const { query } = JSON.parse(event.body);
+    console.log("1. Starting translation");
 
     // 1. Translation to technical jargon for better search
     const transPrompt = `Translate the following user question into technical Czech medical, social, and legal jargon specifically used for vector database searches. Provide only the translated terms: ${query}`;
     const transRes = await getAnswer(cfg.chatModel, [], transPrompt);
     const techQuery = transRes.candidates[0].content.parts[0].text;
+    console.log("2. Translation done");
 
     const vector = await getEmb(techQuery);
+    console.log("3. Embedding done");
+
     const data = await getFullContext(vector, query);
+    console.log("4. Database search done");
 
     // 2. Extraction and Generation
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
+    console.log("5. Extraction done");
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
     // Clean JSON response
