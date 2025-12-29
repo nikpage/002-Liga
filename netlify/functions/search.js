@@ -20,34 +20,18 @@ exports.handler = async (event) => {
     console.log("Query received:", query);
 
     const vector = await getEmb(query);
-    console.log("Embedding done");
+    console.log("Embedding generated");
 
     const data = await getFullContext(vector, query);
-    console.log("Database search done, chunks:", data.chunks.length);
-
-    // LOG ALL CHUNKS IN DETAIL
-    console.log("=== RETRIEVED CHUNKS ===");
-    data.chunks.forEach((chunk, i) => {
-      console.log(`\n--- Chunk ${i + 1} ---`);
-      console.log(`ID: ${chunk.id}`);
-      console.log(`Title: ${chunk.title}`);
-      console.log(`URL: ${chunk.url || 'No URL'}`);
-      console.log(`Content: ${chunk.text.substring(0, 200)}...`);
-    });
-    console.log("=== END CHUNKS ===\n");
+    console.log(`Found ${data.chunks.length} chunks`);
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
-    console.log("AI extraction done");
-    console.log("AI RAW RESPONSE:", extractContent);
+
+    console.log("AI Response:", extractContent.substring(0, 500));
 
     const result = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
-
-    // Log extracted facts for debugging
-    if (result.vytěžené_fakty) {
-      console.log("Extracted facts:", JSON.stringify(result.vytěžené_fakty));
-    }
 
     const uniqueSources = [];
     const seenUrls = new Set();
@@ -84,7 +68,7 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    console.error("Function failed:", err.message, err.stack);
+    console.error("Error:", err.message, err.stack);
     return {
       statusCode: 500,
       headers,
