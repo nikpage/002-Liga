@@ -26,7 +26,7 @@ DETAILED EXTRACTION RULES:
 - When answering "how to" questions (jak získat, jak požádat, jak postupovat), ALWAYS format the answer as NUMBERED STEPS (1., 2., 3., etc.) with specific actions.
 - EXTRACT CONCRETE FACTS: Names of organizations, doctor specialties, specific amounts (Kč), timeframes (days/months), contact info, addresses. NO VAGUE STATEMENTS.
 - Use SIMPLE Czech (8th-9th grade) - short sentences, everyday words. Technical terms in parentheses: "poukaz (lékařský předpis)"
-- Po odpovědi pro Brno VŽDY nabídni možnosti v jiných městech (Praha, Ostrava) pokud jsou dostupné.
+- Po odpovědi pro Brno VÝDY nabídni možnosti v jiných městech (Praha, Ostrava) pokud jsou dostupné.
 - Be precise with numbers.
 - STRICT: Use ONLY provided context. No external knowledge.
 
