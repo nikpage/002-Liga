@@ -1,12 +1,4 @@
-// Ensure all necessary dependencies and configurations are initialized
-const cfg = {
-  chatModel: "gemini-1.5-pro", // Adjust to your specific model identifier if different
-};
-
-/**
- * RESTORED: Full logic for building the extraction prompt
- * No lines removed, no rules simplified.
- */
+// Function definitions for buildExtractionPrompt are moved here to ensure they are found
 function buildExtractionPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
@@ -111,6 +103,7 @@ MANDATORY SOURCE VERIFICATION:
 - pouzite_zdroje MUST ONLY include sources you actually use in your answer
 - If you mention "STP Brno" in detaily → STP Brno's source MUST be in pouzite_zdroje
 - If source is in pouzite_zdroje → content from that source MUST appear in detaily
+- DO NOT list all retrieved chunks - only the ones you actually used
 
 STEP 4 - Extract ALL concrete facts from USED chunks only:
 {
@@ -126,22 +119,36 @@ STEP 4 - Extract ALL concrete facts from USED chunks only:
   }
 }
 
+MANDATORY CONTACT EXTRACTION:
+- If a chunk contains telefon/email/adresa AND you use that chunk → MUST include in detaily
+- If vytěžené_fakty.telefony has data → detaily MUST list those phones
+- If vytěžené_fakty.emaily has data → detaily MUST list those emails
+- If vytěžené_fakty.adresy has data → detaily MUST list those addresses
+- VIOLATION = response rejected
+
 STEP 5 - Write the answer. YOU MUST COPY EVERY SINGLE ITEM from vytěžené_fakty into your answer:
+
+COPY ALL ITEMS EXAMPLES:
+- If vytěžené_fakty.lekari = ["praktický lékař", "ortoped", "neurolog"]
+  Then detaily MUST say: "Může předepsat praktický lékař, ortoped nebo neurolog"
+- If vytěžené_fakty.dodavatele = ["Ortoservis s.r.o.", "DMA Praha"]
+  Then detaily MUST say: "Obraťte se na Ortoservis s.r.o. nebo DMA Praha"
+- If vytěžené_fakty.telefony = ["541 245 495", "123 456 789"]
+  Then detaily MUST say: "Kontakt: tel: 541 245 495, 123 456 789"
 
 {
   "strucne": "Short answer IF you have facts. If vytěžené_fakty is empty, say 'Bohužel nemám konkrétní informace'",
-  "detaily": "COPY ALL ITEMS from vytěžené_fakty here as plain readable Czech text. Use numbered steps for how-to. Write as text, NOT nested JSON.",
+  "detaily": "COPY ALL ITEMS from vytěžené_fakty here as plain readable Czech text. If lekari has 5 doctors, LIST ALL 5. If dodavatele has 3 companies, LIST ALL 3. Use numbered steps for how-to. Write as text, NOT nested JSON.",
   "širší_souvislosti": "Only relevant extra info."
 }
 
 CRITICAL VALIDATION:
-- If vytěžené_fakty has ANY non-empty arrays, strucne and detaily CANNOT be empty.
-- detaily must be plain Czech text, NOT nested JSON structure.
-- ALL facts from vytěžené_fakty MUST appear in detaily.`;
+- If vytěžené_fakty has ANY non-empty arrays, strucne and detaily CANNOT be empty or say "nemám informace"
+- detaily must be plain Czech text, NOT nested JSON structure
+- ALL facts from vytěžené_fakty MUST appear in detaily`;
 }
 
 exports.handler = async (event) => {
-  // CORS Headers
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -149,35 +156,30 @@ exports.handler = async (event) => {
     "Content-Type": "application/json"
   };
 
-  // Handle preflight
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers, body: "" };
   }
 
   try {
-    if (!event.body) throw new Error("Missing request body");
     const { query } = JSON.parse(event.body);
-    if (!query) throw new Error("Missing query in request body");
 
-    // 1. Professional Translation for Search Quality
+    // 1. Translation to technical jargon for better search
     const transPrompt = `Translate the following user question into technical Czech medical, social, and legal jargon specifically used for vector database searches. Provide only the translated terms: ${query}`;
     const transRes = await getAnswer(cfg.chatModel, [], transPrompt);
     const techQuery = transRes.candidates[0].content.parts[0].text;
 
-    // 2. Vector Search and Context Retrieval
     const vector = await getEmb(techQuery);
     const data = await getFullContext(vector, query);
 
-    // 3. Extraction and Content Generation
+    // 2. Extraction and Generation
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
-    // JSON cleanup and parsing
-    const jsonString = extractContent.replace(/```json/g, "").replace(/```/g, "").trim();
-    const result = JSON.parse(jsonString);
+    // Clean JSON response
+    const result = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
 
-    // 4. Formatting Final Output with Metadata
+    // 3. Formatting final output
     const uniqueSources = [];
     const seenUrls = new Set();
     if (result.pouzite_zdroje) {
@@ -189,7 +191,7 @@ exports.handler = async (event) => {
       });
     }
 
-    const strucne = result.strucne || "Omlouvám se, ale pro tento dotaz nemám k dispozici konkrétní informace.";
+    const strucne = result.strucne || "Bohužel nemám konkrétní informace.";
     let formattedResponse = `### 💡 Stručné shrnutí\n${strucne}\n\n`;
 
     if (result.detaily && result.detaily.length > 5) {
@@ -213,14 +215,11 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    console.error("Function Error:", err);
+    console.error("Function failed:", err.message);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({
-        answer: "Omlouváme se, došlo k chybě při zpracování vašeho dotazu.",
-        error: err.message
-      })
+      body: JSON.stringify({ answer: "Chyba: " + err.message })
     };
   }
 };
