@@ -1,3 +1,10 @@
+const { createClient } = require('@supabase/supabase-js');
+const { supabase: cfg } = require('./config');
+
+function getSupabaseClient() {
+  return createClient(cfg.url, cfg.key);
+}
+
 async function getFullContext(vector, query) {
   try {
     const client = getSupabaseClient();
