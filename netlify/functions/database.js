@@ -10,7 +10,7 @@ async function getFullContext(vector, query) {
     const client = getSupabaseClient();
     const { data, error } = await client.rpc('match_document_chunks', {
       query_embedding: vector,
-      match_threshold: 0.15,
+      match_threshold: 0.45,
       match_count: 30
     });
 
