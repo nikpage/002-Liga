@@ -1,6 +1,7 @@
 const { getEmb, getAnswer } = require("./ai-client");
 const { getFullContext } = require("./database");
-const { buildExtractionPrompt, buildAnswerPrompt } = require("./prompts");
+const { formatPrompt: buildExtractionPrompt } = require("./prompts");
+
 const { google: cfg } = require("./config");
 
 exports.handler = async (event) => {
