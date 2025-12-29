@@ -35,10 +35,7 @@ DETAILED EXTRACTION RULES:
   * WRONG: "Lékař může předepsat pomůcku" → RIGHT: "Praktický lékař, ortoped nebo neurolog může předepsat pomůcku"
   * WRONG: "Obraťte se na dodavatelskou firmu" → RIGHT: "Obraťte se na Ortoservis s.r.o., DMA Praha s.r.o., nebo Medeos s.r.o."
   * WRONG: "Pojišťovna hradí část nákladů" → RIGHT: "Pojišťovna hradí 90% nákladů"
-- If context mentions "lékař může předepsat", you MUST state WHICH medical specialty (praktický lékař, ortoped, neurolog, etc.)
-- If context mentions suppliers/dodavatelé, you MUST list their NAMES, not just "dodavatelské firmy"
-- If context mentions money/insurance coverage, you MUST state SPECIFIC AMOUNTS and percentages
-- Use SIMPLE, DIRECT Czech language (7th-9th grade level) - short sentences, everyday words, no bureaucratic jargon
+- Use SIMPLE, DIRECT Czech language (8th-9th grade level) - short sentences, everyday words. Include technical terms in parentheses after plain language: "poukaz (lékařský předpis)"
 - Po odpovědi pro Brno VŽDY nabídni také možnosti v jiných městech (Praha, Ostrava, atd.) pokud jsou v kontextu dostupné.
 - Be precise. If the context says "půjčovné 50 Kč/den", do not just say "je tam poplatek", say "poplatek je 50 Kč za den".
 - PŘÍSNÉ PRAVIDLO NULOVÝCH ZNALOSTÍ: Používej POUZE poskytnutý kontext. Pokud odpověď není v kontextu, nepoužívej externí znalosti.
@@ -49,17 +46,54 @@ ${ctx}
 
 USER QUESTION: ${query}
 
-OUTPUT JSON:
+OUTPUT JSON - YOU MUST FILL ALL FIELDS IN THIS EXACT ORDER:
+
+STEP 1 - Identify which sources you will use:
 {
-  "strucne": "One short sentence with the key answer. Use simple, direct Czech (7th-9th grade).",
-  "detaily": "CONCRETE FACTS ONLY. List specific: doctor specialties (not 'lékař'), organization names (not 'organizace'), amounts in Kč, timeframes in days. Use numbered steps for processes. NO generic advice. If asking about suppliers, LIST THEIR NAMES. If asking about doctors, STATE WHICH SPECIALTIES. Start with Brno, then other cities if available.",
-  "sirsí_souvislosti": "Additional useful facts from context - specific rules, exceptions, what to do if rejected. NO FILLER.",
   "pouzite_zdroje": [
-    { "index": 1, "titulek": "Title", "url": "URL" }
+    {
+      "index": 1,
+      "title": "exact title from source",
+      "url": "exact url from source",
+      "duvod": "why this source is relevant - what specific facts it provides"
+    }
+  ],
+  "nevyuzite_zdroje": [
+    {
+      "index": 2,
+      "title": "exact title",
+      "duvod": "why NOT used - too generic / wrong topic / etc"
+    }
   ]
 }
 
-CRITICAL: If the context is too vague to answer specifically, say exactly what information is missing.`;
+STEP 2 - Extract concrete facts from ONLY the sources listed in pouzite_zdroje:
+{
+  "vytezene_fakty": {
+    "dodavatele": ["exact company names from context"],
+    "lekari": ["exact medical specialties from context"],
+    "organizace": ["exact organization names from context"],
+    "castky": ["exact amounts in Kč from context"],
+    "lhuly": ["exact timeframes in days/months from context"],
+    "telefony": ["exact phone numbers from context"],
+    "adresy": ["exact addresses from context"],
+    "emaily": ["exact emails from context"]
+  }
+}
+
+STEP 3 - Write answer using ONLY the facts extracted above:
+{
+  "strucne": "One short actionable sentence. NO FLUFF. Pure answer.",
+  "detaily": "Numbered steps if 'how to' question. MUST include ALL facts from vytezene_fakty. Names, amounts, contacts. If vytezene_fakty has dodavatele, they MUST appear here with names. If it has telefony/adresy, they MUST appear here. Start with Brno, then other cities.",
+  "sirsí_souvislosti": "Only truly relevant extra info. What if rejected, exceptions, alternatives. NO GENERIC ADVICE."
+}
+
+CRITICAL VALIDATION RULES:
+- Every fact in vytezene_fakty MUST appear in detaily
+- pouzite_zdroje = ONLY sources that contributed facts to vytezene_fakty
+- If vytezene_fakty.dodavatele is not empty, detaily MUST list those company names
+- If vytezene_fakty.lekari is not empty, detaily MUST list those specialties
+- NO GENERIC TERMS like "dodavatelská firma" or "lékař" - use extracted names`;
 }
 
 module.exports = { formatPrompt };
