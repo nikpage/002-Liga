@@ -2,7 +2,7 @@ const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext } = require('./database');
 const { google: cfg } = require('./config');
 
-// Function definitions for buildExtractionPrompt are moved here to ensure they are found
+// Function definitions for buildExtractionPrompt are moved here to en sure they are found
 function buildExtractionPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
