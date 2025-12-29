@@ -56,7 +56,7 @@ exports.handler = async (event) => {
 
     // Validation
     console.log("=== VALIDATION ===");
-    const fakty = result.vytěžené_fakty;
+    const fakty = result.vytěžené_fakty || {};
     const detaily = result.detaily || "";
     const missing = [];
 
