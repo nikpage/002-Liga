@@ -1,48 +1,7 @@
 const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext } = require('./database');
 const { google: cfg } = require('./config');
-
-function buildExtractionPrompt(query, data) {
-  const chunks = (data && data.chunks) ? data.chunks : [];
-  const ctx = chunks.map((c, i) => {
-    let content = c.text;
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed.entity && parsed.municipality) {
-        let readable = `Organizace: ${parsed.entity}, Místo: ${parsed.municipality}`;
-        if (parsed.features && Array.isArray(parsed.features)) {
-          readable += `, Pomůcky: ${parsed.features.join(', ')}`;
-        }
-        if (parsed.address) readable += `, Adresa: ${parsed.address}`;
-        if (parsed.phone) readable += `, Telefon: ${parsed.phone}`;
-        if (parsed.email) readable += `, Email: ${parsed.email}`;
-        if (parsed.note) readable += `, Poznámka: ${parsed.note}`;
-        content = readable;
-      }
-    } catch (e) {}
-    return `[Source ${i+1}] Title: ${c.title} | URL: ${c.url || 'No URL'} | Content: ${content}`;
-  }).join("\n\n");
-
-  return `You are a world-class legal and social advisor for Liga Vozíčkářů. Provide expert response in Czech.
-
-RULES:
-- Extract concrete facts: organization names, doctor types, amounts (Kč), timeframes, contacts
-- Use simple Czech, short sentences
-- For "how to" questions, use NUMBERED STEPS
-- Use ONLY provided context
-
-CONTEXT:
-${ctx}
-
-USER QUESTION: ${query}
-
-OUTPUT JSON:
-{
-  "strucne": "Brief answer in Czech",
-  "detaily": "Detailed answer with ALL facts from context - organizations, contacts, steps",
-  "pouzite_zdroje": [{"index": 1, "title": "...", "url": "...", "duvod": "..."}]
-}`;
-}
+const { buildExtractionPrompt } = require('./prompts');
 
 exports.handler = async (event) => {
   const headers = {
@@ -58,15 +17,35 @@ exports.handler = async (event) => {
 
   try {
     const { query } = JSON.parse(event.body);
+    console.log("Query received:", query);
 
     const vector = await getEmb(query);
+    console.log("Embedding done");
+
     const data = await getFullContext(vector, query);
+    console.log("Database search done, chunks:", data.chunks.length);
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
+    console.log("AI extraction done");
 
     const result = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
+
+    // Validate: If vytěžené_fakty has data, answer MUST have data
+    if (result.vytěžené_fakty) {
+      const hasFacts = Object.values(result.vytěžené_fakty).some(arr => Array.isArray(arr) && arr.length > 0);
+      if (hasFacts) {
+        if (!result.detaily || result.detaily.length < 20 || result.detaily.includes("nemám") || result.detaily.includes("nejsou")) {
+          console.error("VALIDATION FAILED: Has facts but answer is generic");
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ answer: "Chyba: Systém nenašel dostatečně konkrétní informace." })
+          };
+        }
+      }
+    }
 
     const uniqueSources = [];
     const seenUrls = new Set();
@@ -80,16 +59,16 @@ exports.handler = async (event) => {
     }
 
     const strucne = result.strucne || "Bohužel nemám konkrétní informace.";
-    let formattedResponse = `### 💡 Stručné shrnutí\n${strucne}\n\n`;
+    let formattedResponse = `💡 **Stručné shrnutí**\n${strucne}\n\n`;
 
     if (result.detaily && result.detaily.length > 5) {
-      formattedResponse += `### 📝 Podrobnosti\n${result.detaily}\n\n`;
+      formattedResponse += `📝 **Podrobnosti**\n${result.detaily}\n\n`;
     }
 
     if (uniqueSources.length > 0) {
-      formattedResponse += `---\n### 📄 Použité zdroje\n`;
+      formattedResponse += `---\n📄 **Použité zdroje**\n`;
       uniqueSources.forEach(s => {
-        formattedResponse += `- [${s.titulek}](${s.url})\n`;
+        formattedResponse += `• [${s.titulek}](${s.url})\n`;
       });
     }
 
@@ -103,7 +82,7 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    console.error("Function failed:", err.message);
+    console.error("Function failed:", err.message, err.stack);
     return {
       statusCode: 500,
       headers,

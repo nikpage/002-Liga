@@ -5,7 +5,7 @@ function buildExtractionPrompt(query, data) {
     try {
       const parsed = JSON.parse(content);
       if (parsed.entity && parsed.municipality) {
-        let readable = `Organizace: ${parsed.entity}, Město: ${parsed.municipality}`;
+        let readable = `Organizace: ${parsed.entity}, Místo: ${parsed.municipality}`;
         if (parsed.features && Array.isArray(parsed.features)) {
           readable += `, Pomůcky: ${parsed.features.join(', ')}`;
         }
@@ -22,7 +22,7 @@ function buildExtractionPrompt(query, data) {
   return `You are a world-class legal and social advisor for Liga Vozíčkářů. You must provide a human-expert level response in Czech.
 
 DETAILED EXTRACTION RULES:
-- Liga Vozíčkářů je organizace zaměřená na Brno a jeho okolí. Pokud uživatel nezadá konkrétní město, PRIORITIZUJ informace z Brna.
+- Liga Vozíčkářů je organizace zaměřená na Brno a jeho okolí. Pokud uživatel nezadá konkrétní místo, PRIORITIZUJ informace z Brna.
 - When answering "how to" questions (jak získat, jak požádat, jak postupovat), ALWAYS format the answer as NUMBERED STEPS (1., 2., 3., etc.) with specific actions.
 - EXTRACT CONCRETE FACTS: Names of organizations, doctor specialties, specific amounts (Kč), timeframes (days/months), contact info, addresses. NO VAGUE STATEMENTS.
 - Use SIMPLE Czech (8th-9th grade) - short sentences, everyday words. Technical terms in parentheses: "poukaz (lékařský předpis)"
@@ -89,7 +89,7 @@ STEP 2 - Select which chunks to use:
   "pouzite_chunky": [1, 3, 7],
   "vyrazene_chunky": [
     {"id": 2, "duvod": "neobsahuje kontakty"},
-    {"id": 5, "duvod": "nerelevantní město"}
+    {"id": 5, "duvod": "nerelevantní místo"}
   ]
 }
 
@@ -144,7 +144,7 @@ COPY ALL ITEMS EXAMPLES:
 CRITICAL VALIDATION:
 - If vytěžené_fakty has ANY non-empty arrays, strucne and detaily CANNOT be empty or say "nemám informace"
 - detaily must be plain Czech text, NOT nested JSON structure
-- ALL facts from vytěžené_fakty MUST appear in detaily\`;
+- ALL facts from vytěžené_fakty MUST appear in detaily`;
 }
 
 module.exports = { buildExtractionPrompt };
