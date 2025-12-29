@@ -48,4 +48,4 @@ async function getFullContext(vector, query) {
   }
 }
 
-module.exports = { getFullContext };
+module.exports = { getSupabaseClient, getFullContext };
