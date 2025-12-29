@@ -40,6 +40,7 @@ exports.handler = async (event) => {
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
     console.log("AI extraction done");
+    console.log("AI RAW RESPONSE:", extractContent);
 
     const result = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
 
