@@ -29,6 +29,7 @@ exports.handler = async (event) => {
     console.log("=== RETRIEVED CHUNKS ===");
     data.chunks.forEach((chunk, i) => {
       console.log(`\n--- Chunk ${i + 1} ---`);
+      console.log(`ID: ${chunk.id}`);
       console.log(`Title: ${chunk.title}`);
       console.log(`URL: ${chunk.url || 'No URL'}`);
       console.log(`Content: ${chunk.text.substring(0, 200)}...`);
