@@ -25,6 +25,16 @@ exports.handler = async (event) => {
     const data = await getFullContext(vector, query);
     console.log("Database search done, chunks:", data.chunks.length);
 
+    // LOG ALL CHUNKS IN DETAIL
+    console.log("=== RETRIEVED CHUNKS ===");
+    data.chunks.forEach((chunk, i) => {
+      console.log(`\n--- Chunk ${i + 1} ---`);
+      console.log(`Title: ${chunk.title}`);
+      console.log(`URL: ${chunk.url || 'No URL'}`);
+      console.log(`Content: ${chunk.text.substring(0, 200)}...`);
+    });
+    console.log("=== END CHUNKS ===\n");
+
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
@@ -52,7 +62,7 @@ exports.handler = async (event) => {
     let formattedResponse = `💡 **Stručné shrnutí**\n${strucne}\n\n`;
 
     if (result.detaily && result.detaily.length > 5) {
-      formattedResponse += `📝 **Podrobnosti**\n${result.detaily}\n\n`;
+      formattedResponse += `📋 **Podrobnosti**\n${result.detaily}\n\n`;
     }
 
     if (uniqueSources.length > 0) {
