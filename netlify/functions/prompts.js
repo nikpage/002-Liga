@@ -31,69 +31,56 @@ DETAILED EXTRACTION RULES:
 - Liga Vozíčkářů je organizace zaměřená na Brno a jeho okolí. Pokud uživatel nezadá konkrétní město, PRIORITIZUJ informace z Brna.
 - When answering "how to" questions (jak získat, jak požádat, jak postupovat), ALWAYS format the answer as NUMBERED STEPS (1., 2., 3., etc.) with specific actions.
 - EXTRACT CONCRETE FACTS: Names of organizations, doctor specialties, specific amounts (Kč), timeframes (days/months), contact info, addresses. NO VAGUE STATEMENTS.
-- CRITICAL EXAMPLES OF WHAT TO DO:
-  * WRONG: "Lékař může předepsat pomůcku" → RIGHT: "Praktický lékař, ortoped nebo neurolog může předepsat pomůcku"
-  * WRONG: "Obraťte se na dodavatelskou firmu" → RIGHT: "Obraťte se na Ortoservis s.r.o., DMA Praha s.r.o., nebo Medeos s.r.o."
-  * WRONG: "Pojišťovna hradí část nákladů" → RIGHT: "Pojišťovna hradí 90% nákladů"
-- Use SIMPLE, DIRECT Czech language (8th-9th grade level) - short sentences, everyday words. Include technical terms in parentheses after plain language: "poukaz (lékařský předpis)"
-- Po odpovědi pro Brno VŽDY nabídni také možnosti v jiných městech (Praha, Ostrava, atd.) pokud jsou v kontextu dostupné.
-- Be precise. If the context says "půjčovné 50 Kč/den", do not just say "je tam poplatek", say "poplatek je 50 Kč za den".
-- PŘÍSNÉ PRAVIDLO NULOVÝCH ZNALOSTÍ: Používej POUZE poskytnutý kontext. Pokud odpověď není v kontextu, nepoužívej externí znalosti.
-- PROTOKOL PRÁZDNÉHO POLE: Pokud v kontextu VŮBEC NENÍ relevantní informace k dotazu, nastav "strucne" na "Bohužel pro tento dotaz nemám v dokumentaci dostatek konkrétních informací." NICMÉNĚ pokud v kontextu JSOU částečné nebo související informace, MUSÍŠ je použít a poskytnout co nejlepší odpověď na základě dostupných dat.
+- CRITICAL EXAMPLES:
+  * WRONG: "Lékař může předepsat" → RIGHT: "Praktický lékař, ortoped nebo neurolog může předepsat"
+  * WRONG: "Obraťte se na dodavatelskou firmu" → RIGHT: "Obraťte se na Ortoservis s.r.o., DMA Praha s.r.o."
+  * WRONG: "Pojišťovna hradí část" → RIGHT: "Pojišťovna hradí 90%"
+- Use SIMPLE Czech (8th-9th grade) - short sentences, everyday words. Technical terms in parentheses: "poukaz (lékařský předpis)"
+- Po odpovědi pro Brno VŽDY nabídni možnosti v jiných městech (Praha, Ostrava) pokud jsou dostupné.
+- Be precise with numbers.
+- STRICT: Use ONLY provided context. No external knowledge.
 
 CONTEXT:
 ${ctx}
 
 USER QUESTION: ${query}
 
-OUTPUT JSON - YOU MUST FILL ALL FIELDS IN THIS EXACT ORDER:
+OUTPUT JSON - COMPLETE ALL STEPS:
 
-STEP 1 - Identify which sources you will use:
+STEP 1 - Identify sources:
 {
-  "pouzite_zdroje": [
-    {
-      "index": 1,
-      "title": "exact title from source",
-      "url": "exact url from source",
-      "duvod": "why this source is relevant - what specific facts it provides"
-    }
-  ],
-  "nevyuzite_zdroje": [
-    {
-      "index": 2,
-      "title": "exact title",
-      "duvod": "why NOT used - too generic / wrong topic / etc"
-    }
-  ]
+  "pouzite_zdroje": [{"index": 1, "title": "...", "url": "...", "duvod": "..."}]
 }
 
-STEP 2 - Extract concrete facts from ONLY the sources listed in pouzite_zdroje:
+STEP 2 - Extract ALL concrete facts:
 {
   "vytezene_fakty": {
-    "dodavatele": ["exact company names from context"],
-    "lekari": ["exact medical specialties from context"],
-    "organizace": ["exact organization names from context"],
-    "castky": ["exact amounts in Kč from context"],
-    "lhuly": ["exact timeframes in days/months from context"],
-    "telefony": ["exact phone numbers from context"],
-    "adresy": ["exact addresses from context"],
-    "emaily": ["exact emails from context"]
+    "dodavatele": ["list ALL company names found"],
+    "lekari": ["list ALL doctor specialties found"],
+    "organizace": ["list ALL org names"],
+    "castky": ["list ALL amounts"],
+    "lhuly": ["list ALL timeframes"],
+    "telefony": ["list ALL phones"],
+    "adresy": ["list ALL addresses"],
+    "emaily": ["list ALL emails"]
   }
 }
 
-STEP 3 - Write answer using ONLY the facts extracted above:
+STEP 3 - NOW write the answer. YOU MUST COPY EVERY SINGLE ITEM from vytezene_fakty into your answer:
+
+EXAMPLE - If vytezene_fakty.lekari = ["praktický lékař", "ortoped", "neurolog"]
+Then detaily MUST say: "Může předepsat praktický lékař, ortoped nebo neurolog"
+
+EXAMPLE - If vytezene_fakty.dodavatele = ["Ortoservis s.r.o.", "DMA Praha"]
+Then detaily MUST say: "Obraťte se na Ortoservis s.r.o. nebo DMA Praha"
+
 {
-  "strucne": "One short actionable sentence. NO FLUFF. Pure answer.",
-  "detaily": "Numbered steps if 'how to' question. MUST include ALL facts from vytezene_fakty. Names, amounts, contacts. If vytezene_fakty has dodavatele, they MUST appear here with names. If it has telefony/adresy, they MUST appear here. Start with Brno, then other cities.",
-  "sirsí_souvislosti": "Only truly relevant extra info. What if rejected, exceptions, alternatives. NO GENERIC ADVICE."
+  "strucne": "Short answer IF you have facts. If vytezene_fakty is empty, say 'Bohužel nemám konkrétní informace'",
+  "detaily": "COPY ALL ITEMS from vytezene_fakty here. If lekari has 5 doctors, LIST ALL 5. If dodavatele has 3 companies, LIST ALL 3. Use numbered steps for how-to.",
+  "sirsí_souvislosti": "Only relevant extra info."
 }
 
-CRITICAL VALIDATION RULES:
-- Every fact in vytezene_fakty MUST appear in detaily
-- pouzite_zdroje = ONLY sources that contributed facts to vytezene_fakty
-- If vytezene_fakty.dodavatele is not empty, detaily MUST list those company names
-- If vytezene_fakty.lekari is not empty, detaily MUST list those specialties
-- NO GENERIC TERMS like "dodavatelská firma" or "lékař" - use extracted names`;
+CRITICAL: If vytezene_fakty has ANY non-empty arrays, strucne and detaily CANNOT be empty or say "nemám informace".`;
 }
 
 module.exports = { formatPrompt };
