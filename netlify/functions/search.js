@@ -1,15 +1,37 @@
 const { getEmb, getAnswer } = require("./ai-client");
 const { getFullContext } = require("./database");
-const { formatPrompt } = require("./prompts");
+const { buildTranslationPrompt, buildExtractionPrompt, buildAnswerPrompt } = require("./prompts");
 const { google: cfg } = require("./config");
 
 exports.handler = async (event) => {
   try {
     const { query } = JSON.parse(event.body);
+    console.log("=== USER QUERY ===");
+    console.log(query);
 
-    // Use the original query directly
-    const vector = await getEmb(query);
-    const data = await getFullContext(vector, query);
+    // CALL 1: Translate query to proper terminology
+    console.log("=== CALL 1: QUERY TRANSLATION ===");
+    const translationPrompt = buildTranslationPrompt(query);
+    const translateResponse = await getAnswer(cfg.chatModel, [], translationPrompt);
+    const translateContent = translateResponse.candidates[0].content.parts[0].text;
+
+    console.log("Raw translation response:", translateContent);
+
+    let translation;
+    try {
+      translation = JSON.parse(translateContent.replace(/```json/g, "").replace(/```/g, "").trim());
+      console.log("Translated query:", translation.translated_query);
+      console.log("Changes made:", translation.changes_made);
+    } catch (e) {
+      console.warn("Translation parse failed, using original query");
+      translation = { translated_query: query, changes_made: "parse failed" };
+    }
+
+    const searchQuery = translation.translated_query;
+
+    // Get chunks using translated query
+    const vector = await getEmb(searchQuery);
+    const data = await getFullContext(vector, searchQuery);
 
     console.log("=== RETRIEVED CHUNKS ===");
     console.log(`Total chunks found: ${data.chunks.length}`);
@@ -17,95 +39,102 @@ exports.handler = async (event) => {
       console.log(`[${i+1}] ${chunk.title}`);
     });
 
-    const prompt = formatPrompt(query, data);
-    const aiResponse = await getAnswer(cfg.chatModel, [], prompt);
-    const content = aiResponse.candidates[0].content.parts[0].text;
+    // CALL 2: Extract facts
+    console.log("=== CALL 2: FACT EXTRACTION ===");
+    const extractPrompt = buildExtractionPrompt(query, data);
+    const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
+    const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
-    console.log("=== RAW AI RESPONSE ===");
-    console.log(content);
-    console.log("=== END RAW RESPONSE ===");
+    console.log("Raw extraction response:", extractContent.substring(0, 500));
 
-    let parsed;
+    let extraction;
     try {
-      parsed = JSON.parse(content.replace(/```json/g, "").replace(/```/g, "").trim());
-    } catch (parseError) {
-      console.error("❌ JSON PARSE FAILED:", parseError.message);
-      console.error("Raw content that failed:", content.substring(0, 500));
-      // Fallback response
-      parsed = {
-        pouzite_zdroje: [],
-        nevyuzite_zdroje: [],
-        vytezene_fakty: {},
-        strucne: "Omlouváme se, došlo k chybě při zpracování odpovědi.",
-        detaily: null,
-        sirsí_souvislosti: null
+      extraction = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
+      console.log("Used sources:", extraction.pouzite_zdroje?.length || 0);
+      console.log("Extracted facts:", JSON.stringify(extraction.vytezene_fakty, null, 2));
+    } catch (e) {
+      console.error("❌ EXTRACTION PARSE FAILED:", e.message);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ answer: "Chyba při extrakci dat." })
       };
     }
 
-    console.log("=== AI EXTRACTION ===");
-    console.log("Used sources:", parsed.pouzite_zdroje?.length || 0);
-    console.log("Unused sources:", parsed.nevyuzite_zdroje?.length || 0);
-    console.log("Extracted facts:", JSON.stringify(parsed.vytezene_fakty, null, 2));
+    // CALL 3: Write answer
+    console.log("=== CALL 3: ANSWER GENERATION ===");
+    const answerPrompt = buildAnswerPrompt(query, extraction);
+    const answerResponse = await getAnswer(cfg.chatModel, [], answerPrompt);
+    const answerContent = answerResponse.candidates[0].content.parts[0].text;
 
-    // Validation: check if extracted facts appear in answer
-    if (parsed.vytezene_fakty) {
-      const detaily = parsed.detaily || "";
+    console.log("Raw answer response:", answerContent.substring(0, 500));
+
+    let finalAnswer;
+    try {
+      finalAnswer = JSON.parse(answerContent.replace(/```json/g, "").replace(/```/g, "").trim());
+    } catch (e) {
+      console.error("❌ ANSWER PARSE FAILED:", e.message);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ answer: "Chyba při formátování odpovědi." })
+      };
+    }
+
+    // Validation
+    console.log("=== VALIDATION ===");
+    if (extraction.vytezene_fakty) {
+      const detaily = finalAnswer.detaily || "";
       const missing = [];
 
-      if (parsed.vytezene_fakty.dodavatele) {
-        parsed.vytezene_fakty.dodavatele.forEach(d => {
+      if (extraction.vytezene_fakty.dodavatele) {
+        extraction.vytezene_fakty.dodavatele.forEach(d => {
           if (!detaily.includes(d)) missing.push(`dodavatel: ${d}`);
         });
       }
 
-      if (parsed.vytezene_fakty.lekari) {
-        parsed.vytezene_fakty.lekari.forEach(l => {
+      if (extraction.vytezene_fakty.lékaři) {
+        extraction.vytezene_fakty.lékaři.forEach(l => {
           if (!detaily.includes(l)) missing.push(`lékař: ${l}`);
         });
       }
 
       if (missing.length > 0) {
-        console.warn("⚠️ VALIDATION FAILED: Extracted facts not in answer:", missing);
+        console.warn("⚠️ VALIDATION FAILED:", missing);
       } else {
-        console.log("✓ Validation passed: All extracted facts appear in answer");
+        console.log("✓ Validation passed: All facts in answer");
       }
     }
 
-    // Build source list from ONLY pouzite_zdroje
+    // Build source list from ONLY used sources
     const uniqueSources = [];
     const seenUrls = new Set();
 
-    if (parsed.pouzite_zdroje && Array.isArray(parsed.pouzite_zdroje)) {
-      parsed.pouzite_zdroje.forEach(source => {
+    if (extraction.pouzite_zdroje && Array.isArray(extraction.pouzite_zdroje)) {
+      extraction.pouzite_zdroje.forEach(source => {
         if (source.url && !seenUrls.has(source.url)) {
           seenUrls.add(source.url);
-
           const displayTitle = source.title
             .replace(/\.(md|json|doc|docx|pdf)$/i, '')
             .replace(/-/g, ' ')
             .split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
-
           uniqueSources.push({ titulek: displayTitle, url: source.url });
         }
       });
     }
 
     console.log("=== FINAL SOURCES ===");
-    console.log(`Sources in response: ${uniqueSources.length}`);
+    console.log(`Sources: ${uniqueSources.length}`);
     uniqueSources.forEach(s => console.log(`- ${s.titulek}`));
 
-    // Safe access to parsed fields
-    const strucne = parsed.strucne || "Bohužel nemám k dispozici odpověď na tento dotaz.";
+    // Format response
+    const strucne = finalAnswer.stručně || "Bohužel nemám odpověď.";
     let formattedResponse = `### 💡 Stručné shrnutí\n${strucne}\n\n`;
 
-    const hasData = parsed.detaily && parsed.detaily.length > 5;
-
-    if (hasData) {
-      formattedResponse += `### 🔍 Podrobnosti\n${parsed.detaily}\n\n`;
-      if (parsed.sirsí_souvislosti && parsed.sirsí_souvislosti.length > 5) {
-        formattedResponse += `### 💡 Mohlo by vás zajímat\n${parsed.sirsí_souvislosti}\n\n`;
+    if (finalAnswer.detaily && finalAnswer.detaily.length > 5) {
+      formattedResponse += `### 🔍 Podrobnosti\n${finalAnswer.detaily}\n\n`;
+      if (finalAnswer.širší_souvislosti && finalAnswer.širší_souvislosti.length > 5) {
+        formattedResponse += `### 💡 Mohlo by vás zajímat\n${finalAnswer.širší_souvislosti}\n\n`;
       }
     }
 
