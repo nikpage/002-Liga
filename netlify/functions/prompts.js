@@ -5,6 +5,7 @@ function buildExtractionPrompt(query, data) {
   }).join("\n---\n\n");
 
   return `Jsi expert na sociální pomoc pro osoby se zdravotním postižením. Odpovídáš v češtině.
+  
 
 TVŮJ ÚKOL:
 Odpověz na otázku uživatele pomocí informací z kontextu níže. Pokud kontext obsahuje relevantní informace, POUŽIJ JE.
