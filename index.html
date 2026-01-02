@@ -152,16 +152,12 @@
             downloadFile('chat_historie.txt', text);
         }
 
-        function normalizeAnswer(md) {
+        function normalizeAnswer(md, sources) {
             if (!md) return md;
 
-            // 1. Emoji and SHORT title on their own line, separate from content
-            md = md
-                .replace(/💡\s*\*?\*?Shrnutí\*?\*?[^\n]*/gm, "💡 **Shrnutí**\n")
-                .replace(/📋\s*\*?\*?Podrobnosti\*?\*?[^\n]*/gm, "📋 **Podrobnosti**\n")
-                .replace(/📄\s*\*?\*?Zdroje\*?\*?[^\n]*/gm, "📄 **Zdroje**\n");
+            // 1. Keep emoji sections as-is (they're already H1 from backend)
 
-            // 2. Convert raw URLs to readable link text
+            // 2. Convert raw URLs to readable link text (for any strays)
             md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
                 const filename = url.split('/').pop();
                 const title = filename
@@ -172,17 +168,29 @@
                 return `- [${title}](${url})`;
             });
 
+            // 3. Convert numbered references [1] [2] to clickable links with titles
+            if (sources && sources.length > 0) {
+                md = md.replace(/\[(\d+)\]/g, (match, num) => {
+                    const idx = parseInt(num) - 1;
+                    if (idx >= 0 && idx < sources.length) {
+                        const src = sources[idx];
+                        return `<a href="${src.url}" target="_blank" title="${src.title}">[${num}]</a>`;
+                    }
+                    return match;
+                });
+            }
+
             return md.trim();
         }
 
-        function addMessage(role, content) {
+        function addMessage(role, content, sources) {
             const msgs = document.getElementById('messages');
             const newMsg = document.createElement('div');
             newMsg.classList.add('message', role === 'user' ? 'user-msg' : 'bot-msg');
 
             // Apply normalization for bot messages
             if (role === 'assistant') {
-                content = normalizeAnswer(content);
+                content = normalizeAnswer(content, sources);
             }
 
             newMsg.innerHTML = marked.parse(content);
@@ -251,7 +259,8 @@
 
                 const data = await response.json();
                 progressIndicator.style.display = 'none';
-                const answerElement = addMessage('assistant', data.answer);
+                const sources = data.metadata && data.metadata.sources ? data.metadata.sources : [];
+                const answerElement = addMessage('assistant', data.answer, sources);
                 chatHistory.push({ role: "assistant", content: data.answer });
                 if (data.suggestions) addSuggestions(data.suggestions);
                 setTimeout(() => { answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);

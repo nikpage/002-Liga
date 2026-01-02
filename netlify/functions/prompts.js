@@ -41,39 +41,36 @@ Jak použít: Konkrétní instrukce
 Popis: Vzor smlouvy definující smluvní strany, rozsah a výši úhrady za péči
 Jak použít: Stáhněte dokument a vyplňte podle vaší situace. Smlouva je povinná pokud péči poskytuje osoba, která není blízký příbuzný.
 
-PRAVIDLA FORMÁTOVÁNÍ (DŮLEŽITÉ):
-- Piš pro čtenáře s úrovní 9. třídy ZŠ - jednoduše, jasně
-- ŽÁDNÉ ZDĚNÉ TEXTY: Rozbij dlouhé odstavce na kratší kusy (max 3-4 řádky)
-- Nadpisy na vlastní řádek, text pod nimi
+PRAVIDLA FORMÁTOVÁNÍ (ABSOLUTNĚ POVINNÉ):
 
-**EMOJI SEKCE - KRITICKÉ:**
-- Emoji a nadpis MUSÍ být krátký: 2-3 slova MAX
-- Příklady: "💡 Shrnutí" nebo "📋 Podrobnosti" nebo "📄 Zdroje"
-- NE: "💡 Shrnutí polohovacích postelí v Brně" - MOC DLOUHÉ
-- ANO: "💡 Shrnutí" - SPRÁVNĚ
+**1. EMOJI SEKCE = H1:**
+- Format: "# 💡 Shrnutí" na vlastním řádku
+- Text začíná na DALŠÍM řádku
+- Emoji sekce jsou JEDINÉ H1 nadpisy
+- Max 1-2 slova po emoji
 
-**INLINE ODKAZY - KRITICKÉ:**
-- KAŽDÁ položka v seznamu MUSÍ mít odkaz na zdroj
-- Formát: "• Název organizace [odkaz](URL)"
-- Příklad: "• Sanus Brno nabízí polohovací postele [více info](http://test.ligaportal.cz/...)"
-- NIKDY ne jen: "• Sanus Brno nabízí polohovací postele" BEZ odkazu
+**2. OSTATNÍ NADPISY = H2/H3:**
+- Používej ## pro hlavní podnadpisy
+- Používej ### pro menší podnadpisy
+- NIKDY nepoužívaj H1 (#) kromě emoji sekcí
 
-- Používej odrážky (•) pro seznamy
-- Kontakty formátuj přehledně, např:
-  • Organizace XYZ [web](URL)
-    Tel: 123 456 789
-    Email: info@xyz.cz
-    Adresa: Ulice 1, Brno
+**3. NEPIŠ ŽÁDNÉ ODKAZY:**
+- Piš jen fakta bez odkazů
+- Backend automaticky přidá čísla odkazů
+- Příklad: "Sanus Brno nabízí mechanické vozíky" (backend přidá [1])
+- NIKDY nepiš: [1], [2], (Zdroj 1), [více info], atd.
 
-- Mezi sekce dej prázdný řádek pro čitelnost
-- Pro postupy používej číslování (1., 2., 3.)
+**4. RELEVANCE:**
+- Odpověz JEN na co se ptají
+- Postele = jen postele, ne vozíky
+- Cena = jen cena, ne procedury
 
 Vrať JSON:
 {
-  "strucne": "Krátká odpověď v 2-3 větách",
-  "detaily": "Plná odpověď s dobrým formátováním:\n\n**Nadpis sekce**\nText text text.\n\nDalší odstavec.\n\n• Odrážka 1\n• Odrážka 2\n\nKontakty:\n• Org 1 - tel, email\n• Org 2 - tel, email",
+  "strucne": "2-3 věty",
+  "detaily": "# 💡 Shrnutí\nText.\n\n## Podnadpis\nInformace o věci.\n\n• Položka 1\n• Položka 2",
   "pouzite_zdroje": [
-    {"title": "Název dokumentu", "url": "URL"}
+    {"title": "Čitelný název dokumentu", "url": "URL"}
   ]
 }`;
 }
