@@ -133,22 +133,41 @@ const progressIndicator=document.getElementById('progress-indicator');
 function normalizeAnswer(md){
   if(!md) return md;
 
-  // Force section headers
+  // 1) Force emoji sections to correct format
   md = md
-    .replace(/^💡.*$/gm,"# 🧭\n# Shrnutí")
-    .replace(/^📋.*$/gm,"# 📝\n# Podrobnosti")
-    .replace(/^📄.*$/gm,"# 📚\n# Zdroje");
+    .replace(/^💡.*$/gm,"💡\n# Shrnutí")
+    .replace(/^📋.*$/gm,"📋\n# Podrobnosti")
+    .replace(/^📄.*$/gm,"📄\n# Zdroje");
 
-  // Convert raw source URLs to readable links
-  let i=0;
-  md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm,(m,url)=>{
-    i++;
-    const name=url.split('/').pop()
-      .replace(/\.(pdf|docx?|txt)$/i,'')
-      .replace(/[_-]+/g,' ')
+  // 2) Clean up technical filenames in URLs to readable titles
+  function cleanTitle(filename) {
+    return filename
+      .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/pujcovny pomucek pujcovny/gi, 'Půjčovny pomůcek')
+      .replace(/^(\w)/, (m) => m.toUpperCase())
       .trim();
-    const title=name.charAt(0).toUpperCase()+name.slice(1);
-    return `- [${title}](${url}) [${i}]`;
+  }
+
+  // 3) Convert raw URLs in source lists to numbered readable links
+  let sourceNum = 0;
+  md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
+    sourceNum++;
+    const filename = url.split('/').pop();
+    const title = cleanTitle(filename);
+    return `- [${title}](${url}) [${sourceNum}]`;
+  });
+
+  // 4) Find inline URLs and convert to numbered references
+  const urlPattern = /(?<!\[)\bhttps?:\/\/[^\s\)]+/g;
+  const foundUrls = [];
+  md = md.replace(urlPattern, (url) => {
+    let idx = foundUrls.indexOf(url);
+    if (idx === -1) {
+      foundUrls.push(url);
+      idx = foundUrls.length - 1;
+    }
+    return `[${idx + 1}]`;
   });
 
   return md.trim();
