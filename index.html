@@ -1,229 +1,267 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-<meta charset="UTF-8" />
-<title>Aplikace Otázky a Odpovědi</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Aplikace Otázky a Odpovědi</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background-color: #f0f2f5; }
 
-<style>
-body{
-  font-family: Arial, sans-serif;
-  max-width: 800px;
-  margin: 50px auto;
-  padding: 20px;
-  background:#f0f2f5;
-}
+        #chat-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
 
-#chat-container{
-  background:#fff;
-  border-radius:10px;
-  padding:20px;
-  box-shadow:0 2px 10px rgba(0,0,0,.1);
-  min-height:400px;
-  display:flex;
-  flex-direction:column;
-}
+        #messages { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; max-height: 500px; display: flex; flex-direction: column; scroll-behavior: smooth; }
 
-#messages{
-  flex-grow:1;
-  overflow-y:auto;
-  margin-bottom:20px;
-  max-height:500px;
-  display:flex;
-  flex-direction:column;
-}
+        .message { margin-bottom: 20px; padding: 15px; border-radius: 15px; max-width: 85%; line-height: 1.6; position: relative; }
+        .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
+        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 50px; }
 
-.message{
-  margin-bottom:20px;
-  padding:15px;
-  border-radius:15px;
-  max-width:85%;
-  line-height:1.6;
-}
+        .msg-toolbar {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+            position: absolute;
+            bottom: 10px;
+            left: 15px;
+            right: 15px;
+        }
 
-.user-msg{
-  background:#007bff;
-  color:#fff;
-  align-self:flex-end;
-}
+        .tool-btn {
+            background-color: #ffffff;
+            border: 1px solid #adb5bd;
+            color: #495057;
+            cursor: pointer;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
 
-.bot-msg{
-  background:#e4e6eb;
-  color:#000;
-}
+        .suggestions-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 15px;
+            margin-top: 5px;
+            width: 100%;
+        }
 
-/* ==== FORCED FORMATTING ==== */
-.bot-msg h1{
-  font-size:1.6em;
-  margin-top:1.2em;
-}
-.bot-msg h2{
-  font-size:1.3em;
-  margin-top:1em;
-}
-.bot-msg h3{
-  font-size:1.1em;
-  margin-top:.8em;
-}
-.bot-msg ul, .bot-msg ol{
-  padding-left:1.2em;
-}
-.bot-msg a{
-  color:#0056b3;
-  text-decoration:underline;
-}
-/* ========================== */
+        .suggestion-btn {
+            background-color: white;
+            border: 1px solid #007bff;
+            color: #007bff;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
 
-.controls-area{
-  display:flex;
-  gap:10px;
-  align-items:center;
-}
+        /* REALIGNED CONTROLS */
+        .controls-area {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            width: 100%;
+        }
 
-input[type="text"]{
-  flex-grow:1;
-  padding:12px;
-  border-radius:5px;
-  border:1px solid #ccc;
-  font-size:16px;
-}
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 12px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+            outline: none;
+        }
 
-#sendBtn{
-  padding:12px 25px;
-  border:none;
-  border-radius:5px;
-  background:#28a745;
-  color:#fff;
-  font-size:16px;
-  font-weight:bold;
-  cursor:pointer;
-}
+        #sendBtn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            white-space: nowrap;
+        }
 
-#progress-indicator{
-  margin-top:10px;
-  padding:10px;
-  background:#fff;
-  border:1px solid #ccc;
-  border-radius:5px;
-  display:none;
-  text-align:center;
-  font-weight:bold;
-}
-</style>
+        #sendBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
+
+        #progress-indicator {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: none;
+            color: #333;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
 </head>
-
 <body>
-<div id="chat-container">
-  <h2>Aplikace Otázky a Odpovědi 🧠</h2>
-  <div id="messages"></div>
+    <div id="chat-container">
+        <h2>Aplikace Otázky a Odpovědi 🧠</h2>
+        <div id="messages"></div>
 
-  <div class="controls-area">
-    <input id="query" type="text" placeholder="Zadejte dotaz..."
-      onkeydown="if(event.key==='Enter') ask()" />
-    <button id="sendBtn" onclick="ask()">Odeslat</button>
-  </div>
+        <div class="controls-area">
+            <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
+            <button id="sendBtn" onclick="ask()">Odeslat</button>
+        </div>
 
-  <div id="progress-indicator">Probíhá zpracování…</div>
-</div>
+        <div id="progress-indicator">Pracuji...</div>
+    </div>
 
-<script>
-let chatHistory=[];
-const progressIndicator=document.getElementById('progress-indicator');
+    <script>
+        let chatHistory = [];
+        const progressIndicator = document.getElementById('progress-indicator');
 
-function normalizeAnswer(md){
-  if(!md) return md;
+        function downloadFile(filename, text) {
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
 
-  // 1) Force emoji sections to correct format
-  md = md
-    .replace(/^💡.*$/gm,"💡\n# Shrnutí")
-    .replace(/^📋.*$/gm,"📋\n# Podrobnosti")
-    .replace(/^📄.*$/gm,"📄\n# Zdroje");
+        function downloadHistory() {
+            if (chatHistory.length === 0) return;
+            const text = chatHistory.map(msg => `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`).join('\n\n');
+            downloadFile('chat_historie.txt', text);
+        }
 
-  // 2) Clean up technical filenames in URLs to readable titles
-  function cleanTitle(filename) {
-    return filename
-      .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
-      .replace(/[_-]+/g, ' ')
-      .replace(/pujcovny pomucek pujcovny/gi, 'Půjčovny pomůcek')
-      .replace(/^(\w)/, (m) => m.toUpperCase())
-      .trim();
-  }
+        function normalizeAnswer(md) {
+            if (!md) return md;
 
-  // 3) Convert raw URLs in source lists to numbered readable links
-  let sourceNum = 0;
-  md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
-    sourceNum++;
-    const filename = url.split('/').pop();
-    const title = cleanTitle(filename);
-    return `- [${title}](${url}) [${sourceNum}]`;
-  });
+            // 1. Emoji and title on SAME line (not separate lines)
+            md = md
+                .replace(/^💡.*$/gm, "💡 **Shrnutí**")
+                .replace(/^📋.*$/gm, "📋 **Podrobnosti**")
+                .replace(/^📄.*$/gm, "📄 **Zdroje**");
 
-  // 4) Find inline URLs and convert to numbered references
-  const urlPattern = /(?<!\[)\bhttps?:\/\/[^\s\)]+/g;
-  const foundUrls = [];
-  md = md.replace(urlPattern, (url) => {
-    let idx = foundUrls.indexOf(url);
-    if (idx === -1) {
-      foundUrls.push(url);
-      idx = foundUrls.length - 1;
-    }
-    return `[${idx + 1}]`;
-  });
+            // 2. Convert raw URLs to readable link text
+            md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
+                const filename = url.split('/').pop();
+                const title = filename
+                    .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+                    .replace(/[_-]+/g, ' ')
+                    .replace(/^(\w)/, (m) => m.toUpperCase())
+                    .trim();
+                return `- [${title}](${url})`;
+            });
 
-  return md.trim();
-}
+            return md.trim();
+        }
 
-function addMessage(role,content){
-  const msgs=document.getElementById('messages');
-  const div=document.createElement('div');
-  div.className='message '+(role==='user'?'user-msg':'bot-msg');
-  div.innerHTML=marked.parse(content);
-  msgs.appendChild(div);
-  div.scrollIntoView({behavior:'smooth',block:'end'});
-}
+        function addMessage(role, content) {
+            const msgs = document.getElementById('messages');
+            const newMsg = document.createElement('div');
+            newMsg.classList.add('message', role === 'user' ? 'user-msg' : 'bot-msg');
 
-async function ask(){
-  const input=document.getElementById('query');
-  const btn=document.getElementById('sendBtn');
-  const q=input.value.trim();
-  if(!q) return;
+            // Apply normalization for bot messages
+            if (role === 'assistant') {
+                content = normalizeAnswer(content);
+            }
 
-  addMessage('user',q);
-  chatHistory.push({role:'user',content:q});
-  input.value='';
-  btn.disabled=true;
-  progressIndicator.style.display='block';
+            newMsg.innerHTML = marked.parse(content);
 
-  try{
-    const res=await fetch('/.netlify/functions/search',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        query:
-          "Odpovídej pouze v češtině.\n"+
-          "VÝSTUP MUSÍ BÝT STRUKTUROVANÝ:\n"+
-          "- Sekce: emoji na řádku, pak H1 (2–5 slov)\n"+
-          "- Podsekce H2/H3\n"+
-          "- Krátké texty, seznamy, tabulky\n"+
-          "- Odkazy jen z DB, žádné holé URL\n"+
-          "- Zdroje číslované, max 3 primární\n"+
-          "Dotaz: "+q,
-        history:chatHistory
-      })
-    });
+            if (role === 'assistant') {
+                const toolbar = document.createElement('div');
+                toolbar.className = 'msg-toolbar';
+                const dlReplyBtn = document.createElement('button');
+                dlReplyBtn.className = 'tool-btn';
+                dlReplyBtn.innerHTML = '💾 Odpověď';
+                dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
+                const dlChatBtn = document.createElement('button');
+                dlChatBtn.className = 'tool-btn';
+                dlChatBtn.innerHTML = '📂 Celý chat';
+                dlChatBtn.onclick = () => downloadHistory();
+                toolbar.appendChild(dlReplyBtn);
+                toolbar.appendChild(dlChatBtn);
+                newMsg.appendChild(toolbar);
+            }
 
-    const data=await res.json();
-    progressIndicator.style.display='none';
-    const out=normalizeAnswer(data.answer);
-    addMessage('assistant',out);
-    chatHistory.push({role:'assistant',content:out});
-  }catch(e){
-    progressIndicator.style.display='none';
-    addMessage('assistant','CHYBA SYSTÉMU');
-  }finally{
-    btn.disabled=false;
-  }
-}
-</script>
+            msgs.appendChild(newMsg);
+            if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return newMsg;
+        }
+
+        function addSuggestions(suggestions) {
+            if (!suggestions || suggestions.length === 0) return;
+            const msgs = document.getElementById('messages');
+            const container = document.createElement('div');
+            container.className = 'suggestions-container';
+            suggestions.forEach(text => {
+                const btn = document.createElement('button');
+                btn.className = 'suggestion-btn';
+                btn.textContent = text;
+                btn.onclick = () => ask(text);
+                container.appendChild(btn);
+            });
+            msgs.appendChild(container);
+        }
+
+        async function ask(suggestionText = null) {
+            const input = document.getElementById('query');
+            const btn = document.getElementById('sendBtn');
+            const query = suggestionText || input.value.trim();
+            if (!query) return;
+
+            addMessage('user', query);
+            input.value = '';
+            btn.disabled = true;
+            chatHistory.push({ role: "user", content: query });
+
+            const oldSuggestions = document.querySelectorAll('.suggestions-container');
+            oldSuggestions.forEach(el => el.style.display = 'none');
+            progressIndicator.style.display = 'block';
+
+            try {
+                const response = await fetch('/.netlify/functions/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: "Odpovídej pouze v češtině. Dotaz: " + query,
+                        history: chatHistory,
+                        model: "gemini-2.0-flash-lite"
+                    })
+                });
+
+                const data = await response.json();
+                progressIndicator.style.display = 'none';
+                const answerElement = addMessage('assistant', data.answer);
+                chatHistory.push({ role: "assistant", content: data.answer });
+                if (data.suggestions) addSuggestions(data.suggestions);
+                setTimeout(() => { answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+            } catch (error) {
+                progressIndicator.style.display = 'none';
+                addMessage('assistant', 'CHYBA SYSTÉMU: Zkontrolujte připojení.');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
 </body>
 </html>
