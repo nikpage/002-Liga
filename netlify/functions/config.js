@@ -2,7 +2,7 @@ module.exports = {
   supabase: {
     url: process.env.SUPABASE_URL,
     key: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    tableName: "document_chunks"
+    tableName: "chunks"
   },
   google: {
     key: process.env.GOOGLE_API_KEY,
