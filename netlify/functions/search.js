@@ -54,6 +54,17 @@ exports.handler = async (event) => {
     // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
+    // Clean up ugly filenames in text (uhrady_ZP.pdf -> Úhrady ZP)
+    answer = answer.replace(/\b[\w-]+\.(pdf|docx?|xlsx?|txt)\b/gi, (match) => {
+      return match
+        .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+        .replace(/uhrady zp/gi, 'Úhrady ZP')
+        .replace(/^(\w)/, (m) => m.toUpperCase())
+        .trim();
+    });
+
     // Add [1] after each sentence in content sections
     // Target sentences that end with . ! ? and aren't headers
     let refNum = 1;
