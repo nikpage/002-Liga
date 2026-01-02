@@ -155,11 +155,11 @@
         function normalizeAnswer(md) {
             if (!md) return md;
 
-            // 1. Emoji and title on SAME line (not separate lines)
+            // 1. Emoji and SHORT title on their own line, separate from content
             md = md
-                .replace(/^💡.*$/gm, "💡 **Shrnutí**")
-                .replace(/^📋.*$/gm, "📋 **Podrobnosti**")
-                .replace(/^📄.*$/gm, "📄 **Zdroje**");
+                .replace(/💡\s*\*?\*?Shrnutí\*?\*?[^\n]*/gm, "💡 **Shrnutí**\n")
+                .replace(/📋\s*\*?\*?Podrobnosti\*?\*?[^\n]*/gm, "📋 **Podrobnosti**\n")
+                .replace(/📄\s*\*?\*?Zdroje\*?\*?[^\n]*/gm, "📄 **Zdroje**\n");
 
             // 2. Convert raw URLs to readable link text
             md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
