@@ -29,37 +29,36 @@ exports.handler = async (event) => {
       extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
     );
 
-    const uniqueSources = [];
+    // Build clean source list (max 5)
+    const sources = [];
     const seenUrls = new Set();
 
-    const fileUrls = await getFileUrls(vector);
-    if (fileUrls.length) {
-      fileUrls.forEach(url => {
-        if (!seenUrls.has(url)) {
-          seenUrls.add(url);
-          uniqueSources.push({ titulek: "Ke stažení", url });
-        }
-      });
-    } else if (result.pouzite_zdroje) {
-      result.pouzite_zdroje.forEach(source => {
+    if (result.pouzite_zdroje) {
+      result.pouzite_zdroje.slice(0, 5).forEach(source => {
         if (source.url && !seenUrls.has(source.url)) {
           seenUrls.add(source.url);
-          uniqueSources.push({ titulek: source.title, url: source.url });
+          // Clean up filename to readable title
+          let title = source.title || source.url.split('/').pop();
+          title = title
+            .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+            .replace(/^(\w)/, (m) => m.toUpperCase())
+            .trim();
+
+          sources.push({ title, url: source.url });
         }
       });
     }
 
-    const strucne = result.strucne || "Bohužel nemám konkrétní informace.";
-    let formattedResponse = `💡 **Stručné shrnutí**\n${strucne}\n\n`;
+    // Use AI's output directly (it already has emoji sections formatted)
+    let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
-    if (result.detaily && result.detaily.length > 5) {
-      formattedResponse += `📋 **Podrobnosti**\n${result.detaily}\n\n`;
-    }
-
-    if (uniqueSources.length > 0) {
-      formattedResponse += `---\n📄 **Použité zdroje**\n`;
-      uniqueSources.forEach(s => {
-        formattedResponse += `• ${s.url}\n`;
+    // Add source section at bottom
+    if (sources.length > 0) {
+      answer += `\n\n---\n# 📄 Zdroje\n\n`;
+      sources.forEach((s, i) => {
+        answer += `${i + 1}. [${s.title}](${s.url})\n`;
       });
     }
 
@@ -67,8 +66,8 @@ exports.handler = async (event) => {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        answer: formattedResponse,
-        metadata: { sources: uniqueSources }
+        answer,
+        metadata: { sources }
       })
     };
 
