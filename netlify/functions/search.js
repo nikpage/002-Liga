@@ -29,16 +29,16 @@ exports.handler = async (event) => {
       extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
     );
 
-    // Build clean source list (max 5)
+    // Build sources from actual retrieved chunks (max 5)
     const sources = [];
     const seenUrls = new Set();
 
-    if (result.pouzite_zdroje) {
-      result.pouzite_zdroje.slice(0, 5).forEach(source => {
-        if (source.url && !seenUrls.has(source.url)) {
-          seenUrls.add(source.url);
-          // Clean up filename to readable title
-          let title = source.title || source.url.split('/').pop();
+    if (data && data.chunks) {
+      data.chunks.forEach((chunk) => {
+        if (chunk.url && !seenUrls.has(chunk.url) && sources.length < 5) {
+          seenUrls.add(chunk.url);
+
+          let title = chunk.title || chunk.url.split('/').pop();
           title = title
             .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
             .replace(/[_-]+/g, ' ')
@@ -46,15 +46,25 @@ exports.handler = async (event) => {
             .replace(/^(\w)/, (m) => m.toUpperCase())
             .trim();
 
-          sources.push({ title, url: source.url });
+          sources.push({ title, url: chunk.url });
         }
       });
     }
 
-    // Use AI's output directly (it already has emoji sections formatted)
+    // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
-    // Add source section at bottom
+    // Add [1] after each sentence in content sections
+    // Target sentences that end with . ! ? and aren't headers
+    let refNum = 1;
+    answer = answer.replace(/([^#\n][.!?])(\s+)/g, (match, punct, space) => {
+      if (refNum <= sources.length) {
+        return `${punct} [${refNum++}]${space}`;
+      }
+      return match;
+    });
+
+    // Add source section
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
       sources.forEach((s, i) => {

@@ -43,35 +43,32 @@ Jak použít: Stáhněte dokument a vyplňte podle vaší situace. Smlouva je po
 
 PRAVIDLA FORMÁTOVÁNÍ (ABSOLUTNĚ POVINNÉ):
 
-**1. EMOJI SEKCE = H1:**
+**1. SHRNUTÍ = KRÁTKÉ:**
+- Max 2-3 věty
+- Přímo odpověz na otázku
+- Bez balastu
+
+**2. EMOJI SEKCE = H1:**
 - Format: "# 💡 Shrnutí" na vlastním řádku
 - Text začíná na DALŠÍM řádku
-- Emoji sekce jsou JEDINÉ H1 nadpisy
 - Max 1-2 slova po emoji
 
-**2. OSTATNÍ NADPISY = H2/H3:**
+**3. OSTATNÍ NADPISY = H2/H3:**
 - Používej ## pro hlavní podnadpisy
 - Používej ### pro menší podnadpisy
-- NIKDY nepoužívaj H1 (#) kromě emoji sekcí
 
-**3. NEPIŠ ŽÁDNÉ ODKAZY:**
-- Piš jen fakta bez odkazů
-- Backend automaticky přidá čísla odkazů
-- Příklad: "Sanus Brno nabízí mechanické vozíky" (backend přidá [1])
-- NIKDY nepiš: [1], [2], (Zdroj 1), [více info], atd.
+**4. PIŠI JEN FAKTA:**
+- Žádné odkazy, žádná čísla, žádné reference
+- Jen čisté informace
+- Backend automaticky přidá reference
 
-**4. RELEVANCE:**
+**5. RELEVANCE:**
 - Odpověz JEN na co se ptají
-- Postele = jen postele, ne vozíky
-- Cena = jen cena, ne procedury
 
 Vrať JSON:
 {
-  "strucne": "2-3 věty",
-  "detaily": "# 💡 Shrnutí\nText.\n\n## Podnadpis\nInformace o věci.\n\n• Položka 1\n• Položka 2",
-  "pouzite_zdroje": [
-    {"title": "Čitelný název dokumentu", "url": "URL"}
-  ]
+  "strucne": "1-2 věty přímá odpověď",
+  "detaily": "# 💡 Shrnutí\nPřímá odpověď.\n\n## Podnadpis\n• Položka 1\n• Položka 2"
 }`;
 }
 
