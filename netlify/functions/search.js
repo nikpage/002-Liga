@@ -17,27 +17,46 @@ exports.handler = async (event) => {
 
   try {
     const { query } = JSON.parse(event.body);
-    console.log("Query received:", query);
 
     const vector = await getEmb(query);
-    console.log("Embedding generated");
-
     const data = await getFullContext(vector, query);
-    console.log(`Found ${data.chunks.length} chunks`);
+
+    // HARD RULE: extract ALL file URLs from chunks.content
+    const fileUrlRegex = /https?:\/\/[^\s"]+\.(pdf|docx?|xlsx?)/gi;
+    const forcedFileUrls = new Set();
+
+    data.chunks.forEach(c => {
+      const text = c.text || c.content || "";
+      const matches = text.match(fileUrlRegex);
+      if (matches) matches.forEach(u => forcedFileUrls.add(u));
+    });
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
-    console.log("AI FULL RESPONSE:", extractContent);
-
-    const result = JSON.parse(extractContent.replace(/```json/g, "").replace(/```/g, "").trim());
+    const result = JSON.parse(
+      extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
+    );
 
     const uniqueSources = [];
     const seenUrls = new Set();
-    if (result.pouzite_zdroje) {
+
+    // HARD ENFORCEMENT
+    if (forcedFileUrls.size > 0) {
+      Array.from(forcedFileUrls).forEach(url => {
+        if (!seenUrls.has(url)) {
+          seenUrls.add(url);
+          uniqueSources.push({ titulek: "Ke stažení", url });
+        }
+      });
+    } else if (result.pouzite_zdroje) {
       result.pouzite_zdroje.forEach(source => {
-        if (source.url && !seenUrls.has(source.url)) {
+        if (
+          source.url &&
+          !source.url.endsWith(".md") &&
+          !seenUrls.has(source.url)
+        ) {
           seenUrls.add(source.url);
           uniqueSources.push({ titulek: source.title, url: source.url });
         }
@@ -47,32 +66,6 @@ exports.handler = async (event) => {
     const strucne = result.strucne || "Bohužel nemám konkrétní informace.";
     let formattedResponse = `💡 **Stručné shrnutí**\n${strucne}\n\n`;
 
-    if (result.detaily && result.detaily.length > 5) {
-      formattedResponse += `📋 **Podrobnosti**\n${result.detaily}\n\n`;
-    }
-
     if (uniqueSources.length > 0) {
-      formattedResponse += `---\n📄 **Použité zdroje**\n`;
-      uniqueSources.forEach(s => {
-        formattedResponse += `• [${s.titulek}](${s.url})\n`;
-      });
-    }
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        answer: formattedResponse,
-        metadata: { sources: uniqueSources }
-      })
-    };
-
-  } catch (err) {
-    console.error("Error:", err.message, err.stack);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ answer: "Chyba: " + err.message })
-    };
-  }
-};
+      formattedResponse += `---\n📥 **Ke stažení**\n`;
+      uniqueSource
