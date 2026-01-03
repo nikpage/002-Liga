@@ -68,6 +68,37 @@ exports.handler = async (event) => {
         .trim();
     });
 
+    // Extract downloadable files (PDF, DOC, XLS) - separate from sources
+    const downloads = [];
+    const seenDownloads = new Set();
+
+    if (data && data.chunks) {
+      data.chunks.forEach((chunk) => {
+        if (chunk.url && /\.(pdf|docx?|xlsx?)$/i.test(chunk.url) && !seenDownloads.has(chunk.url)) {
+          seenDownloads.add(chunk.url);
+
+          let title = chunk.title || chunk.url.split('/').pop();
+          title = title
+            .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+            .replace(/uhrady zp/gi, 'Úhrady ZP')
+            .replace(/^(\w)/, (m) => m.toUpperCase())
+            .trim();
+
+          downloads.push({ title, url: chunk.url });
+        }
+      });
+    }
+
+    // Add downloads section if we have any
+    if (downloads.length > 0) {
+      answer += `\n\n---\n# 📥 Ke stažení\n\n`;
+      downloads.forEach((d) => {
+        answer += `• [${d.title}](${d.url})\n`;
+      });
+    }
+
     // Add [1] after each sentence in content sections
     // Target sentences that end with . ! ? and aren't headers
     let refNum = 1;
