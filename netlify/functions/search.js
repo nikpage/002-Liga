@@ -25,6 +25,9 @@ exports.handler = async (event) => {
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
+    console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
+    console.log("AI RESPONSE:", extractContent);
+
     const result = JSON.parse(
       extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
     );
