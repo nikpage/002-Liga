@@ -29,17 +29,26 @@ CONTENT RULES:
 
 RULES FOR SHARING SOURCES:
 
-**DOWNLOADABLE FILES:**
-- Format each file on its own line like this:
-  • [Title](URL)
-  • [Title](URL)
-- Put short description AFTER the link on same line if needed
-- URLs must be complete from context
-- Never show raw URLs as visible text
+**CRITICAL - EXTRACT URLs FROM CONTEXT:**
+1. Look at the CONTEXT sections above
+2. Each source has format: [Zdroj N] Název: [title] URL: [url] Obsah: [text]
+3. COPY the exact URL from each relevant source
+4. Use those EXACT URLs in your download links
+5. Never invent or modify URLs
+
+**DOWNLOADABLE FILES - PUT IN SEPARATE SECTION:**
+- Create section: # 📥 Ke stažení
+- Each file on own line with bullet
+- Format: • [Clean readable title](EXACT_URL_FROM_CONTEXT)
+- Description goes AFTER the link on same line
+- Title should be SHORT and readable (not filename)
+- URL must be EXACT from context, never modified
 
 **Example:**
-• [Vzor odvolání](http://test.ligaportal.cz/wp-content/uploads/2015/01/Vzor) - Vzorový dokument pro podání odvolání.
-• [Půjčovny pomůcek](http://test.ligaportal.cz/wp-content/uploads/2021/02/pujcovny) - Seznam půjčoven.
+# 📥 Ke stažení
+
+• [Půjčovny pomůcek - obecné](http://test.ligaportal.cz/wp-content/uploads/2021/02/pujcovny) Seznam obecných půjčoven.
+• [Půjčovny pomůcek - STP](http://test.ligaportal.cz/wp-content/uploads/2021/02/stp) Půjčovny Svazu tělesně postižených.
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
