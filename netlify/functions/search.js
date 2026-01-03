@@ -20,6 +20,7 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
+    const fileUrls = await getFileUrls(vector);
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
@@ -68,17 +69,18 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Extract downloadable files (PDF, DOC, XLS) - separate from sources
+    // Extract downloadable files from fileUrls data
     const downloads = [];
     const seenDownloads = new Set();
 
-    if (data && data.chunks) {
-      data.chunks.forEach((chunk) => {
-        if (chunk.url && /\.(pdf|docx?|xlsx?)$/i.test(chunk.url) && !seenDownloads.has(chunk.url)) {
-          seenDownloads.add(chunk.url);
+    if (fileUrls && fileUrls.length > 0) {
+      fileUrls.forEach((url) => {
+        if (!seenDownloads.has(url)) {
+          seenDownloads.add(url);
 
-          let title = chunk.title || chunk.url.split('/').pop();
-          title = title
+          // Extract filename from URL
+          let title = url.split('/').pop();
+          title = decodeURIComponent(title)
             .replace(/\.(pdf|docx?|xlsx?)$/i, '')
             .replace(/[_-]+/g, ' ')
             .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
@@ -86,7 +88,7 @@ exports.handler = async (event) => {
             .replace(/^(\w)/, (m) => m.toUpperCase())
             .trim();
 
-          downloads.push({ title, url: chunk.url });
+          downloads.push({ title, url });
         }
       });
     }
