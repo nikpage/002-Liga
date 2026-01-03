@@ -27,13 +27,10 @@ CONTENT RULES:
   • Mention other cities only when it makes sense or when user explicitly wants broader overview
 - Be selective: Don't list all 20 organizations if 3-5 relevant ones suffice
 
-RULES FOR SHARING SOURCES:
-
-**DOWNLOADABLE FILES:**
-- ONLY include if context has URLs ending in .pdf, .doc, .docx, .xlsx
-- If NO file URLs in context, do NOT create downloads section
-- Format: • [Title](EXACT_URL_FROM_CONTEXT)
-- Never invent or fake file URLs
+DOWNLOADABLE FILES:
+- Backend will handle downloads section automatically
+- Do NOT create "Ke stažení" section yourself
+- Just answer the question normally
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
