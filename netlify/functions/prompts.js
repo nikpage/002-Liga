@@ -58,11 +58,9 @@ PRAVIDLA FORMÁTOVÁNÍ (ABSOLUTNĚ POVINNÉ):
 - Používej ### pro menší podnadpisy
 
 **4. PIŠI JEN FAKTA:**
+- Žádné odkazy, žádná čísla, žádné reference
 - Jen čisté informace
-- Backend automaticky NEPŘIDÁVÁ citace. Veškeré citace řídí výhradně AI podle kontextu.
-- V textu používej číselné citace ve formátu [X], kde X je číslo zdroje ze sekce KONTEXT (např. [1], [2]). Citaci umísti vždy za větu nebo informaci, kterou daný zdroj potvrzuje.
-- Pokud v odpovědi odkazuješ na stejný zdroj vícekrát, musíš použít vždy stejné číslo citace.
-- Nepřidávej citace (např. [1]) do sekce se soubory ke stažení (📥). Citace patří výhradně k faktografickému textu.
+- Backend automaticky přidá reference
 
 **5. RELEVANCE:**
 - Odpověz JEN na co se ptají
