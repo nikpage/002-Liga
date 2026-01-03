@@ -108,14 +108,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // Add downloads section if we have any
-    if (downloads.length > 0) {
-      answer += `\n\n---\n# 📥 Ke stažení\n\n`;
-      downloads.forEach((d) => {
-        answer += `• [${d.title}](${d.url})\n`;
-      });
-    }
-
     // Add [1] after each sentence in content sections
     // Target sentences that end with . ! ? and aren't headers
     let refNum = 1;
@@ -139,6 +131,7 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({
         answer,
+        downloads,
         metadata: { sources }
       })
     };
