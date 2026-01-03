@@ -24,12 +24,10 @@ exports.getFullContext = async (embedding, query) => {
   return { chunks };
 };
 
-exports.getFileUrls = async (embedding) => {
-  const { data, error } = await supabase.rpc('match_document_chunks', {
-    query_embedding: embedding,
-    match_threshold: 0.45,
-    match_count: 30
-  });
+exports.getFileUrls = async () => {
+  const { data, error } = await supabase
+    .from('document_chunks')
+    .select('content');
 
   if (error) throw error;
 

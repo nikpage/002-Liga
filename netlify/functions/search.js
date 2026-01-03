@@ -20,7 +20,7 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    const fileUrls = await getFileUrls(vector);
+    const fileUrls = await getFileUrls();
 
     console.log("FILE URLS:", JSON.stringify(fileUrls, null, 2));
 
