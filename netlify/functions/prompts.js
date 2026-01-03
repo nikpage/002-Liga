@@ -28,28 +28,39 @@ PRAVIDLA OBSAHU:
 - Buď selektivní: Neuváděj všech 20 organizací pokud 3-5 relevantních stačí
 
 PRAVIDLA PRO SDÍLENÍ ZDROJŮ:
-**KRITICKÉ: Pokud kontext obsahuje přímý odkaz na stažitelný soubor (.pdf, .doc, .docx, .xls, .xlsx):**
-1. VŽDY zahrň kompletní URL odkaz do odpovědi
-2. Hledej odkazy ve formátu: http://test.ligaportal.cz/wp-content/uploads/...
-3. Kopíruj celou URL adresu přesně jak je v kontextu
-4. RŮZNÉ URL = RŮZNÉ SOUBORY: Pokud dva dokumenty mají stejný název ale RŮZNÉ URL adresy, jsou to RŮZNÉ soubory - zahrň OBA
+**CRITICAL: If context contains downloadable files (.pdf, .doc, .docx, .xls, .xlsx):**
+1. ALWAYS include complete URL in response
+2. Look for links in format: http://test.ligaportal.cz/wp-content/uploads/...
+3. Copy entire URL exactly as it appears in context
+4. DIFFERENT URLs = DIFFERENT FILES: If two documents have same title but DIFFERENT URLs, they are DIFFERENT files - include BOTH
+5. **ABSOLUTELY FORBIDDEN: URLs must NEVER be visible as plain text. ALWAYS use [Title](URL) format**
 
-**Formát pro ke stažení:**
+**Required format for downloads:**
 # 📥 Ke stažení
 
-• [Čitelný název](URL)
-  Popis (1-2 věty max).
+• [Readable title without extension](complete_URL)
+  Description 1-2 sentences.
 
-**Příklad:**
+**CORRECT example:**
 # 📥 Ke stažení
 
-• [Vzor smlouvy s asistentem](http://test.ligaportal.cz/wp-content/uploads/2014/12/vzor-smlouvy.doc)
-  Vzor smlouvy pro asistenty sociální péče.
+• [Vzor žádosti o schválení](http://test.ligaportal.cz/wp-content/uploads/2015/01/Zadost)
+  Vzor žádosti o schválení právního úkonu za nezletilého.
 
-NIKDY nepiš:
-- "Jak použít:" - ZAKÁZÁNO
-- "Stáhněte dokument a..." - ZAKÁZÁNO
-- Holé URL adresy viditelné v textu - ZAKÁZÁNO
+• [Vzor odvolání](http://test.ligaportal.cz/wp-content/uploads/2015/01/Vzor)
+  Vzor dokumentu pro podání odvolání proti rozhodnutí úřadu.
+
+**WRONG example (NEVER DO THIS):**
+• [Vzor žádosti](http://test.ligaportal.cz/...) o schválení...
+• (http://test.ligaportal.cz/...)
+• http://test.ligaportal.cz/... any text
+
+**NEVER WRITE (STRICT BAN):**
+- Bare URLs in text - e.g. "http://..." or "(http://...)" - ABSOLUTELY FORBIDDEN
+- "Jak použít:" - FORBIDDEN
+- "Stáhněte dokument a..." - FORBIDDEN
+- URLs must ALWAYS be hidden inside [Title](URL) format
+- If you have a URL, you MUST use markdown link format, never bare URL
 
 PRAVIDLA FORMÁTOVÁNÍ (ABSOLUTNĚ POVINNÉ):
 
