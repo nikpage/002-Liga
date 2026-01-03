@@ -48,23 +48,23 @@ RULES FOR SHARING SOURCES:
 4. DIFFERENT URLs = DIFFERENT FILES: If two documents have same title but DIFFERENT URLs, they are DIFFERENT files - include BOTH
 5. **ABSOLUTELY FORBIDDEN: URLs must NEVER be visible as plain text. ALWAYS use [Title](URL) format**
 
-**Required format for downloads:**
-# 📥 Ke stažení
+**CRITICAL RULES FOR DOWNLOADS:**
 
-• [Readable title](complete_URL)
-  Description 1-2 sentences max.
+1. EVERY file MUST use format: • [Title](URL) with description on next line
+2. URL must be COMPLETE and EXACT from context
+3. NEVER show URL as plain text - ALWAYS hide in [Title](URL)
+4. Description = 1 short sentence maximum
 
-**CORRECT example:**
-# 📥 Ke stažení
+**CORRECT:**
+• [Vzor smlouvy](http://test.ligaportal.cz/wp-content/uploads/2014/12/vzor.doc)
+  Vzor smlouvy pro asistenty.
 
-• [Vzor smlouvy s asistentem](http://test.ligaportal.cz/wp-content/uploads/2014/12/vzor-smlouvy.doc)
-  Vzor smlouvy pro asistenty sociální péče.
+**WRONG - NEVER DO THIS:**
+• Vzor smlouvy http://test.ligaportal.cz/...
+• [Vzor smlouvy](http://test.ligaportal.cz/...) - více informací na http://...
+• Stáhněte: http://test.ligaportal.cz/...
 
-**NEVER WRITE:**
-- "Jak použít:" - FORBIDDEN
-- "Stáhněte dokument a..." - FORBIDDEN
-- Bare URLs visible in text - FORBIDDEN
-- URLs must ALWAYS be hidden inside [Title](URL) format
+If you show a raw URL anywhere, you FAILED.
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
