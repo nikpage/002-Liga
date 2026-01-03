@@ -32,7 +32,7 @@ exports.getFileUrls = async () => {
   if (error) throw error;
 
   // Match URLs that may be after markdown bullets (- ) or on their own
-  const re = /(?:^|\s|-\s+)(https?:\/\/[^\s]+?\.(pdf|docx?|xlsx?))/gim;
+  const re = /(https?:\/\/[^\s]+\.(?:pdf|docx?|xlsx?))/gi;
   const out = new Set();
 
   (data || []).forEach(r => {
