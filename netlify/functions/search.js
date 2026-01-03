@@ -22,6 +22,8 @@ exports.handler = async (event) => {
     const data = await getFullContext(vector, query);
     const fileUrls = await getFileUrls(vector);
 
+    console.log("FILE URLS:", JSON.stringify(fileUrls, null, 2));
+
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
