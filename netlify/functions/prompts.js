@@ -29,23 +29,17 @@ CONTENT RULES:
 
 RULES FOR SHARING SOURCES:
 
-**MANDATORY URL FORMAT: Every downloadable file MUST use this exact format:**
-• [Title text here](http://complete.url.here)
-  Description here.
+**DOWNLOADABLE FILES:**
+- Format each file on its own line like this:
+  • [Title](URL)
+  • [Title](URL)
+- Put short description AFTER the link on same line if needed
+- URLs must be complete from context
+- Never show raw URLs as visible text
 
-**Example of CORRECT format:**
-• [Vzor odvolání](http://test.ligaportal.cz/wp-content/uploads/2015/01/Vzor)
-  Vzorový dokument pro podání odvolání.
-
-**Example of WRONG format (NEVER do this):**
-• Vzor odvolání
-  Vzorový dokument...
-
-**FOR DOWNLOADABLE FILES:**
-Format: • [Title](URL)
-         Description.
-
-Never show URLs as visible text.
+**Example:**
+• [Vzor odvolání](http://test.ligaportal.cz/wp-content/uploads/2015/01/Vzor) - Vzorový dokument pro podání odvolání.
+• [Půjčovny pomůcek](http://test.ligaportal.cz/wp-content/uploads/2021/02/pujcovny) - Seznam půjčoven.
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
@@ -75,7 +69,7 @@ FORMATTING RULES (ABSOLUTELY MANDATORY):
 Return JSON:
 {
   "strucne": "1-2 sentences direct answer",
-  "detaily": "# 💡 Shrnutí\nDirect answer.\n\n## Subheading\n• Item 1\n• Item 2"
+  "detaily": "# 💡 Shrnutí\nDirect answer.\n\n## Subheading\n• Item 1\n• Item 2\n• Item 3"
 }`;
 }
 
