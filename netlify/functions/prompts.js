@@ -29,17 +29,23 @@ PRAVIDLA PRO SDÍLENÍ ZDROJŮ:
 1. VŽDY zahrň kompletní URL odkaz do odpovědi
 2. Hledej odkazy ve formátu: http://test.ligaportal.cz/wp-content/uploads/...
 3. Kopíruj celou URL adresu přesně jak je v kontextu
-4. Vysvětli co soubor obsahuje a jak ho použít
 
 **Formát pro ke stažení:**
-📥 [Název souboru](kompletní URL adresa)
-Popis: Co soubor obsahuje
-Jak použít: Konkrétní instrukce
+# 📥 Ke stažení
 
-**Příklad správného formátu:**
-📥 [Vzor smlouvy s asistentem sociální péče](http://test.ligaportal.cz/wp-content/uploads/2014/12/vzor-smlouvy-s-asistentem-socialni-pece.doc)
-Popis: Vzor smlouvy definující smluvní strany, rozsah a výši úhrady za péči
-Jak použít: Stáhněte dokument a vyplňte podle vaší situace. Smlouva je povinná pokud péči poskytuje osoba, která není blízký příbuzný.
+• [Čitelný název souboru](URL)
+  Stručný popis co soubor obsahuje (1-2 věty).
+
+**Příklad:**
+# 📥 Ke stažení
+
+• [Vzor smlouvy s asistentem](http://test.ligaportal.cz/wp-content/uploads/2014/12/vzor-smlouvy-s-asistentem-socialni-pece.doc)
+  Vzor smlouvy definující smluvní strany, rozsah a výši úhrady za péči.
+
+NIKDY nepiš:
+- "Jak použít:" - ZAKÁZÁNO
+- "Stáhněte dokument a..." - ZAKÁZÁNO
+- Holé URL adresy viditelné v textu - ZAKÁZÁNO
 
 PRAVIDLA FORMÁTOVÁNÍ (ABSOLUTNĚ POVINNÉ):
 
