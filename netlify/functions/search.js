@@ -65,16 +65,6 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Add [1] after each sentence in content sections
-    // Target sentences that end with . ! ? and aren't headers
-    let refNum = 1;
-    answer = answer.replace(/([^#\n][.!?])(\s+)/g, (match, punct, space) => {
-      if (refNum <= sources.length) {
-        return `${punct} [${refNum++}]${space}`;
-      }
-      return match;
-    });
-
     // Add source section
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
