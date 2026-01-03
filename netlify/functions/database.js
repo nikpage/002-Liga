@@ -33,13 +33,17 @@ exports.getFileUrls = async (embedding) => {
 
   if (error) throw error;
 
-  const re = /https?:\/\/[^\s"]+\.(pdf|docx?|xlsx?)/gi;
+  // Match URLs that may be after markdown bullets (- ) or on their own
+  const re = /(?:^|\s|-\s+)(https?:\/\/[^\s]+?\.(pdf|docx?|xlsx?))/gim;
   const out = new Set();
 
   (data || []).forEach(r => {
     const c = r.content || '';
-    const m = c.match(re);
-    if (m) m.forEach(u => out.add(u));
+    const matches = c.matchAll(re);
+    for (const match of matches) {
+      // match[1] contains the URL (first capture group)
+      out.add(match[1]);
+    }
   });
 
   return Array.from(out);
