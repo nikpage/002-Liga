@@ -6,7 +6,8 @@ const supabase = createClient(
 );
 
 exports.getFullContext = async (embedding, query) => {
-  const { data, error } = await supabase.rpc('match_document_chunks', {
+  // Updated RPC name to match the 'chunks' table context
+  const { data, error } = await supabase.rpc('match_chunks', {
     query_embedding: embedding,
     match_threshold: 0.45,
     match_count: 30
@@ -25,13 +26,13 @@ exports.getFullContext = async (embedding, query) => {
 };
 
 exports.getFileUrls = async () => {
+  // Updated table name from 'document_chunks' to 'chunks'
   const { data, error } = await supabase
-    .from('document_chunks')
+    .from('chunks')
     .select('content');
 
   if (error) throw error;
 
-  // Match URLs that may be after markdown bullets (- ) or on their own
   const re = /(https?:\/\/[^\s]+\.(?:pdf|docx?|xlsx?))/gi;
   const out = new Set();
 
@@ -39,7 +40,6 @@ exports.getFileUrls = async () => {
     const c = r.content || '';
     const matches = c.matchAll(re);
     for (const match of matches) {
-      // match[1] contains the URL (first capture group)
       out.add(match[1]);
     }
   });
