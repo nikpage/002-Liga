@@ -41,30 +41,11 @@ RULES FOR SHARING SOURCES:
 • Vzor odvolání
   Vzorový dokument...
 
-**CRITICAL: If context contains downloadable files (.pdf, .doc, .docx, .xls, .xlsx):**
-1. ALWAYS include complete URL in response
-2. Look for links in format: http://test.ligaportal.cz/wp-content/uploads/...
-3. Copy entire URL exactly as shown in context
-4. DIFFERENT URLs = DIFFERENT FILES: If two documents have same title but DIFFERENT URLs, they are DIFFERENT files - include BOTH
-5. **ABSOLUTELY FORBIDDEN: URLs must NEVER be visible as plain text. ALWAYS use [Title](URL) format**
+**FOR DOWNLOADABLE FILES:**
+Format: • [Title](URL)
+         Description.
 
-**CRITICAL RULES FOR DOWNLOADS:**
-
-1. EVERY file MUST use format: • [Title](URL) with description on next line
-2. URL must be COMPLETE and EXACT from context
-3. NEVER show URL as plain text - ALWAYS hide in [Title](URL)
-4. Description = 1 short sentence maximum
-
-**CORRECT:**
-• [Vzor smlouvy](http://test.ligaportal.cz/wp-content/uploads/2014/12/vzor.doc)
-  Vzor smlouvy pro asistenty.
-
-**WRONG - NEVER DO THIS:**
-• Vzor smlouvy http://test.ligaportal.cz/...
-• [Vzor smlouvy](http://test.ligaportal.cz/...) - více informací na http://...
-• Stáhněte: http://test.ligaportal.cz/...
-
-If you show a raw URL anywhere, you FAILED.
+Never show URLs as visible text.
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
