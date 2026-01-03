@@ -69,7 +69,7 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Extract downloadable files from fileUrls data
+    // Extract downloadable files and match to document titles
     const downloads = [];
     const seenDownloads = new Set();
 
@@ -78,15 +78,28 @@ exports.handler = async (event) => {
         if (!seenDownloads.has(url)) {
           seenDownloads.add(url);
 
-          // Extract filename from URL
-          let title = url.split('/').pop();
-          title = decodeURIComponent(title)
-            .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-            .replace(/[_-]+/g, ' ')
-            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-            .replace(/uhrady zp/gi, 'Úhrady ZP')
-            .replace(/^(\w)/, (m) => m.toUpperCase())
-            .trim();
+          // Try to find matching chunk to get proper title
+          let title = null;
+          if (data && data.chunks) {
+            const matchingChunk = data.chunks.find(chunk =>
+              chunk.text && chunk.text.includes(url)
+            );
+            if (matchingChunk && matchingChunk.title) {
+              title = matchingChunk.title;
+            }
+          }
+
+          // Fallback: extract from URL
+          if (!title) {
+            title = url.split('/').pop();
+            title = decodeURIComponent(title)
+              .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+              .replace(/[_-]+/g, ' ')
+              .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+              .replace(/uhrady zp/gi, 'Úhrady ZP')
+              .replace(/^(\w)/, (m) => m.toUpperCase())
+              .trim();
+          }
 
           downloads.push({ title, url });
         }
