@@ -20,7 +20,7 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    const fileUrls = getFileUrls(data.chunks);
+    const fileUrls = getFileUrls(data.chunks.slice(0, 10));
 
     console.log("FILE URLS:", JSON.stringify(fileUrls, null, 2));
 
@@ -76,39 +76,38 @@ exports.handler = async (event) => {
     const seenDownloads = new Set();
 
     if (fileUrls && fileUrls.length > 0) {
-      fileUrls.forEach((url) => {
-        if (!seenDownloads.has(url)) {
-          seenDownloads.add(url);
+          fileUrls.forEach((url) => {
+            if (!seenDownloads.has(url)) {
+              seenDownloads.add(url);
 
-          // Try to find matching chunk to get proper title
-          let title = null;
-          if (data && data.chunks) {
-            const matchingChunk = data.chunks.find(chunk =>
-              chunk.text && chunk.text.includes(url)
-            );
-            if (matchingChunk && matchingChunk.title) {
-              title = matchingChunk.title;
+              let title = null;
+              // 1. Priority: Find the document_title from the actual database chunks
+              const matchingChunk = data.chunks.find(chunk =>
+                (chunk.url === url) || (chunk.text && chunk.text.includes(url))
+              );
+
+              if (matchingChunk && matchingChunk.title) {
+                title = matchingChunk.title;
+              } else {
+                // 2. Fallback: Clean the filename from the URL string
+                title = decodeURIComponent(url.split('/').pop());
+              }
+
+              // 3. Final Polish: Apply strict Czech formatting and remove technical marks
+              title = title
+                .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+                .replace(/[_-]+/g, ' ')
+                .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+                .replace(/uhrady zp/gi, 'Úhrady ZP')
+                .replace(/odvolani/gi, 'Odvolání')
+                .replace(/zadost/gi, 'Žádost')
+                .replace(/^(\w)/, (m) => m.toUpperCase())
+                .trim();
+
+              downloads.push({ title, url });
             }
-          }
-
-          // Fallback: extract from URL
-          if (!title) {
-            title = url.split('/').pop();
-          }
-
-          // Clean the title
-          title = decodeURIComponent(title)
-            .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-            .replace(/[_-]+/g, ' ')
-            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-            .replace(/uhrady zp/gi, 'Úhrady ZP')
-            .replace(/^(\w)/, (m) => m.toUpperCase())
-            .trim();
-
-          downloads.push({ title, url });
+          });
         }
-      });
-    }
 
     // Add [1] after each sentence in content sections
     // Target sentences that end with . ! ? and aren't headers
