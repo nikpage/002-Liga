@@ -30,9 +30,16 @@ exports.handler = async (event) => {
     console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
     console.log("AI RESPONSE:", extractContent);
 
-    const result = JSON.parse(
-      extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
-    );
+    // Clean up AI response more thoroughly
+    let cleanContent = extractContent
+      .replace(/```json\s*/g, "")
+      .replace(/```\s*/g, "")
+      .trim();
+
+    // Remove any leading/trailing whitespace or newlines
+    cleanContent = cleanContent.replace(/^\s+|\s+$/g, "");
+
+    const result = JSON.parse(cleanContent);
 
     // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
