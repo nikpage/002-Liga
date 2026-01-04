@@ -1,10 +1,9 @@
 const { getEmb, getAnswer } = require('./ai-client');
-const { getFullContext, getFileUrls } = require('./database');
+const { getFullContext } = require('./database');
 const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
 exports.handler = async (event) => {
-  console.log("FUNCTION STARTED");
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -18,38 +17,32 @@ exports.handler = async (event) => {
 
   try {
     const { query } = JSON.parse(event.body);
-    console.log("QUERY:", query);
+    console.log("FUNCTION STARTED - QUERY:", query);
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-
-    console.log("FILE URLS will be extracted after answer generation");
+    console.log("GOT DATA - CHUNKS:", data.chunks.length);
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
+    console.log("AI RAW RESPONSE:", extractContent);
 
-    console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
-    console.log("AI RESPONSE:", extractContent);
-
-    // Clean up AI response more thoroughly
+    // Clean up AI response
     let cleanContent = extractContent
       .replace(/```json\s*/g, "")
       .replace(/```\s*/g, "")
       .trim();
-
-    // Remove any leading/trailing whitespace or newlines
     cleanContent = cleanContent.replace(/^\s+|\s+$/g, "");
-
-    console.log("CLEAN CONTENT:", cleanContent);
+    console.log("CLEANED CONTENT:", cleanContent);
 
     const result = JSON.parse(cleanContent);
-    console.log("PARSED RESULT:", result);
+    console.log("PARSED OK");
 
     // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
-    // Clean up ugly filenames in text (uhrady_ZP.pdf -> Úhrady ZP)
+    // Clean up ugly filenames in text
     answer = answer.replace(/\b[\w-]+\.(pdf|docx?|xlsx?|txt)\b/gi, (match) => {
       return match
         .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
@@ -60,8 +53,7 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Add [1] after each sentence in content sections
-    // Target sentences that end with . ! ? and aren't headers
+    // Add [1] after each sentence
     let refNum = 1;
     answer = answer.replace(/([^#\n][.!?])(\s+)/g, (match, punct, space) => {
       if (refNum <= data.chunks.length) {
@@ -70,7 +62,7 @@ exports.handler = async (event) => {
       return match;
     });
 
-    // Scan answer for [n] patterns to identify cited chunks
+    // Scan answer for citations
     const citedIndices = new Set();
     const citationPattern = /\[(\d+)\]/g;
     let match;
@@ -78,7 +70,7 @@ exports.handler = async (event) => {
       citedIndices.add(parseInt(match[1]) - 1);
     }
 
-    // Extract downloadable files from cited chunks using database downloads column
+    // Get cited chunks
     const citedChunks = Array.from(citedIndices)
       .filter(i => i < data.chunks.length)
       .map(i => data.chunks[i]);
@@ -111,21 +103,29 @@ exports.handler = async (event) => {
     const downloads = [];
     const seenDownloads = new Set();
 
-    // Get downloads directly from database chunks
+    // Get downloads from database - SAFE version
+    console.log("PROCESSING DOWNLOADS FROM", citedChunks.length, "CITED CHUNKS");
     citedChunks.forEach(chunk => {
-      if (chunk.downloads && typeof chunk.downloads === 'string' && chunk.downloads.trim()) {
-        const urls = chunk.downloads.split(/[\s,]+/).filter(u => u.trim());
-        urls.forEach(url => {
-          if (!seenDownloads.has(url) && url.match(/\.(pdf|docx?|xlsx?)$/i)) {
-            seenDownloads.add(url);
-            const title = formatFileTitle(url);
-            downloads.push({ title, url });
-          }
-        });
+      try {
+        if (chunk && chunk.downloads && typeof chunk.downloads === 'string' && chunk.downloads.trim()) {
+          console.log("CHUNK HAS DOWNLOADS:", chunk.downloads);
+          const urls = chunk.downloads.split(/[\s,]+/).filter(u => u && u.trim());
+          urls.forEach(url => {
+            if (url && !seenDownloads.has(url) && url.match(/\.(pdf|docx?|xlsx?)$/i)) {
+              seenDownloads.add(url);
+              const title = formatFileTitle(url);
+              downloads.push({ title, url });
+              console.log("ADDED DOWNLOAD:", title);
+            }
+          });
+        }
+      } catch (e) {
+        console.error("ERROR PROCESSING CHUNK DOWNLOAD:", e.message);
       }
     });
+    console.log("TOTAL DOWNLOADS FOUND:", downloads.length);
 
-    // Build sources from cited chunks only
+    // Build sources from cited chunks
     const sources = [];
     const seenUrls = new Set();
 
@@ -150,7 +150,7 @@ exports.handler = async (event) => {
       });
     }
 
-    // Add downloads section first
+    // Add downloads section
     if (downloads.length > 0) {
       answer += `\n\n---\n# 📥 Ke stažení\n\n`;
       downloads.forEach(d => {
@@ -158,7 +158,7 @@ exports.handler = async (event) => {
       });
     }
 
-    // Add source section second
+    // Add source section
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
       sources.forEach((s, i) => {
@@ -182,7 +182,11 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ answer: "Chyba.", error: err.message })
+      body: JSON.stringify({
+        answer: "Chyba: " + err.message,
+        error: err.message,
+        stack: err.stack
+      })
     };
   }
 };
