@@ -44,7 +44,13 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    const citedChunks = data.chunks.slice(0, 5);
+    // Get the sources the AI actually used
+    const usedSourceIndices = result.used_sources || [];
+
+    // Filter chunks to only those the AI used
+    const citedChunks = usedSourceIndices
+      .map(idx => data.chunks[idx])
+      .filter(chunk => chunk !== undefined);
 
     const downloads = [];
     const seenDownloads = new Set();
