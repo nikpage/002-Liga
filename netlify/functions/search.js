@@ -46,16 +46,7 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    let refNum = 1;
-    const citedIndices = new Set();
-    answer = answer.replace(/<source>(\d+)<\/source>/g, (match, sourceNum) => {
-      citedIndices.add(parseInt(sourceNum) - 1);
-      return `[${refNum++}]`;
-    });
-
-    const citedChunks = Array.from(citedIndices)
-      .filter(i => i < data.chunks.length)
-      .map(i => data.chunks[i]);
+    const citedChunks = data.chunks.slice(0, 5);
 
     const downloads = [];
     const seenDownloads = new Set();
@@ -88,22 +79,19 @@ exports.handler = async (event) => {
     const seenUrls = new Set();
 
     if (data && data.chunks) {
-      citedIndices.forEach((index) => {
-        if (index < data.chunks.length) {
-          const chunk = data.chunks[index];
-          if (chunk.url && !seenUrls.has(chunk.url)) {
-            seenUrls.add(chunk.url);
+      citedChunks.forEach((chunk) => {
+        if (chunk.url && !seenUrls.has(chunk.url)) {
+          seenUrls.add(chunk.url);
 
-            let title = chunk.title || chunk.url.split('/').pop();
-            title = title
-              .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
-              .replace(/[_-]+/g, ' ')
-              .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-              .replace(/^(\w)/, (m) => m.toUpperCase())
-              .trim();
+          let title = chunk.title || chunk.url.split('/').pop();
+          title = title
+            .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+            .replace(/^(\w)/, (m) => m.toUpperCase())
+            .trim();
 
-            sources.push({ title, url: chunk.url });
-          }
+          sources.push({ title, url: chunk.url });
         }
       });
     }
