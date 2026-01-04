@@ -1,5 +1,5 @@
 const { getEmb, getAnswer } = require('./ai-client');
-const { getFullContext } = require('./database');
+const { getFullContext, getFileUrls } = require('./database');
 const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
@@ -17,32 +17,25 @@ exports.handler = async (event) => {
 
   try {
     const { query } = JSON.parse(event.body);
-    console.log("FUNCTION STARTED - QUERY:", query);
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    console.log("GOT DATA - CHUNKS:", data.chunks.length);
+
+    console.log("FILE URLS will be extracted after answer generation");
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
-    console.log("AI RAW RESPONSE:", extractContent);
 
-    // Clean up AI response
-    let cleanContent = extractContent
-      .replace(/```json\s*/g, "")
-      .replace(/```\s*/g, "")
-      .trim();
-    cleanContent = cleanContent.replace(/^\s+|\s+$/g, "");
-    console.log("CLEANED CONTENT:", cleanContent);
+    console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
+    console.log("AI RESPONSE:", extractContent);
 
-    const result = JSON.parse(cleanContent);
-    console.log("PARSED OK");
+    const result = JSON.parse(
+      extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
+    );
 
-    // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
-    // Clean up ugly filenames in text
     answer = answer.replace(/\b[\w-]+\.(pdf|docx?|xlsx?|txt)\b/gi, (match) => {
       return match
         .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
@@ -53,7 +46,6 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Add [1] after each sentence
     let refNum = 1;
     answer = answer.replace(/([^#\n][.!?])(\s+)/g, (match, punct, space) => {
       if (refNum <= data.chunks.length) {
@@ -62,7 +54,6 @@ exports.handler = async (event) => {
       return match;
     });
 
-    // Scan answer for citations
     const citedIndices = new Set();
     const citationPattern = /\[(\d+)\]/g;
     let match;
@@ -70,62 +61,33 @@ exports.handler = async (event) => {
       citedIndices.add(parseInt(match[1]) - 1);
     }
 
-    // Get cited chunks
     const citedChunks = Array.from(citedIndices)
       .filter(i => i < data.chunks.length)
       .map(i => data.chunks[i]);
 
-    // Helper function to format file titles with icons
-    const formatFileTitle = (url) => {
-      const ext = url.split('.').pop().toLowerCase();
-      let icon = '';
-
-      if (ext === 'pdf') icon = 'PDF 📄';
-      else if (ext === 'doc' || ext === 'docx') icon = 'Word 📝';
-      else if (ext === 'xlsx' || ext === 'xls') icon = 'Excel 📊';
-      else icon = '📎';
-
-      let title = decodeURIComponent(url.split('/').pop());
-      title = title
-        .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-        .replace(/[_-]+/g, ' ')
-        .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-        .replace(/uhrady zp/gi, 'Úhrady ZP')
-        .replace(/odvolani/gi, 'Odvolání')
-        .replace(/zadost/gi, 'Žádost')
-        .replace(/zadanka/gi, 'Žádánka')
-        .replace(/^(\w)/, (m) => m.toUpperCase())
-        .trim();
-
-      return `${icon} ${title}`;
-    };
-
     const downloads = [];
     const seenDownloads = new Set();
 
-    // Get downloads from database - SAFE version
-    console.log("PROCESSING DOWNLOADS FROM", citedChunks.length, "CITED CHUNKS");
     citedChunks.forEach(chunk => {
-      try {
-        if (chunk && chunk.downloads && typeof chunk.downloads === 'string' && chunk.downloads.trim()) {
-          console.log("CHUNK HAS DOWNLOADS:", chunk.downloads);
-          const urls = chunk.downloads.split(/[\s,]+/).filter(u => u && u.trim());
-          urls.forEach(url => {
-            if (url && !seenDownloads.has(url) && url.match(/\.(pdf|docx?|xlsx?)$/i)) {
-              seenDownloads.add(url);
-              const title = formatFileTitle(url);
-              downloads.push({ title, url });
-              console.log("ADDED DOWNLOAD:", title);
-            }
-          });
-        }
-      } catch (e) {
-        console.error("ERROR PROCESSING CHUNK DOWNLOAD:", e.message);
+      if (chunk.downloads && Array.isArray(chunk.downloads)) {
+        chunk.downloads.forEach(item => {
+          if (item.source_url && !seenDownloads.has(item.source_url)) {
+            seenDownloads.add(item.source_url);
+
+            const ext = item.source_url.split('.').pop().toLowerCase();
+            let icon = '';
+            if (ext === 'pdf') icon = 'PDF 📄';
+            else if (ext === 'doc' || ext === 'docx') icon = 'Word 📝';
+            else if (ext === 'xlsx' || ext === 'xls') icon = 'Excel 📊';
+            else icon = '📎';
+
+            const title = `${icon} ${item.file_name}`;
+            downloads.push({ title, url: item.source_url });
+          }
+        });
       }
     });
-    console.log("TOTAL DOWNLOADS FOUND:", downloads.length);
 
-    // Build sources from cited chunks
     const sources = [];
     const seenUrls = new Set();
 
@@ -150,7 +112,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // Add downloads section
     if (downloads.length > 0) {
       answer += `\n\n---\n# 📥 Ke stažení\n\n`;
       downloads.forEach(d => {
@@ -158,7 +119,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // Add source section
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
       sources.forEach((s, i) => {
@@ -177,16 +137,10 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    console.error("ERROR:", err.message);
-    console.error("STACK:", err.stack);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({
-        answer: "Chyba: " + err.message,
-        error: err.message,
-        stack: err.stack
-      })
+      body: JSON.stringify({ answer: "Chyba." })
     };
   }
 };
