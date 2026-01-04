@@ -31,18 +31,3 @@ exports.getFullContext = async (embedding, query) => {
 
   return { chunks };
 };
-
-exports.getFileUrls = (chunks) => {
-  const re = /(https?:\/\/[^\s]+\.(?:pdf|docx?|xlsx?))/gi;
-  const out = new Set();
-
-  (chunks || []).forEach(chunk => {
-    const c = chunk.text || '';
-    const matches = c.matchAll(re);
-    for (const match of matches) {
-      out.add(match[1]);
-    }
-  });
-
-  return Array.from(out);
-};
