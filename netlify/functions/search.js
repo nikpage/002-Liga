@@ -47,19 +47,11 @@ exports.handler = async (event) => {
     });
 
     let refNum = 1;
-    answer = answer.replace(/([^#\n][.!?])(\s+)/g, (match, punct, space) => {
-      if (refNum <= data.chunks.length) {
-        return `${punct} [${refNum++}]${space}`;
-      }
-      return match;
-    });
-
     const citedIndices = new Set();
-    const citationPattern = /\[(\d+)\]/g;
-    let match;
-    while ((match = citationPattern.exec(answer)) !== null) {
-      citedIndices.add(parseInt(match[1]) - 1);
-    }
+    answer = answer.replace(/<source>(\d+)<\/source>/g, (match, sourceNum) => {
+      citedIndices.add(parseInt(sourceNum) - 1);
+      return `[${refNum++}]`;
+    });
 
     const citedChunks = Array.from(citedIndices)
       .filter(i => i < data.chunks.length)
@@ -76,12 +68,16 @@ exports.handler = async (event) => {
 
             const ext = item.source_url.split('.').pop().toLowerCase();
             let icon = '';
-            if (ext === 'pdf') icon = 'PDF 📄';
-            else if (ext === 'doc' || ext === 'docx') icon = 'Word 📝';
-            else if (ext === 'xlsx' || ext === 'xls') icon = 'Excel 📊';
+            if (ext === 'pdf') icon = '📄';
+            else if (ext === 'doc' || ext === 'docx') icon = '📝';
+            else if (ext === 'xlsx' || ext === 'xls') icon = '📊';
             else icon = '📎';
 
-            const title = `${icon} ${item.file_name}`;
+            let cleanName = item.file_name.replace(/\.[^/.]+$/, "")
+                                .replace(/zadanka/gi, 'Žádanka')
+                                .replace(/uhrady/gi, 'Úhrady');
+
+            const title = `${icon} ${cleanName}`;
             downloads.push({ title, url: item.source_url });
           }
         });
