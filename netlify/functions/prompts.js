@@ -28,9 +28,9 @@ CONTENT RULES:
 - Be selective: Don't list all 20 organizations if 3-5 relevant ones suffice
 
 DOWNLOADABLE FILES:
-- Backend will handle downloads section automatically
-- Do NOT create "Ke stažení" section yourself
-- Just answer the question normally
+- NEVER create a "Zdroje" or "Ke stažení" section.
+- At the end of every sentence using information, add a source tag: <source>1</source>, <source>2</source>.
+- Use the number matching the [Zdroj X] block provided in the context.
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
