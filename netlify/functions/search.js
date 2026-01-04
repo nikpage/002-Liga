@@ -20,7 +20,7 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    const fileUrls = await getFileUrls();
+    const fileUrls = getFileUrls(data.chunks);
 
     console.log("FILE URLS:", JSON.stringify(fileUrls, null, 2));
 
@@ -123,6 +123,14 @@ exports.handler = async (event) => {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
       sources.forEach((s, i) => {
         answer += `${i + 1}. [${s.title}](${s.url})\n`;
+      });
+    }
+
+    // Add downloads section
+    if (downloads.length > 0) {
+      answer += `\n\n---\n# 📥 Ke stažení\n\n`;
+      downloads.forEach(d => {
+        answer += `• [${d.title}](${d.url})\n`;
       });
     }
 

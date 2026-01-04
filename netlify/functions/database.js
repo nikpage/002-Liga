@@ -25,19 +25,12 @@ exports.getFullContext = async (embedding, query) => {
   return { chunks };
 };
 
-exports.getFileUrls = async () => {
-  // Updated table name from 'document_chunks' to 'chunks'
-  const { data, error } = await supabase
-    .from('chunks')
-    .select('content');
-
-  if (error) throw error;
-
+exports.getFileUrls = (chunks) => {
   const re = /(https?:\/\/[^\s]+\.(?:pdf|docx?|xlsx?))/gi;
   const out = new Set();
 
-  (data || []).forEach(r => {
-    const c = r.content || '';
+  (chunks || []).forEach(chunk => {
+    const c = chunk.text || '';
     const matches = c.matchAll(re);
     for (const match of matches) {
       out.add(match[1]);
