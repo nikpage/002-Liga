@@ -34,39 +34,6 @@ exports.handler = async (event) => {
       extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
     );
 
-    // Scan answer for [n] patterns to identify cited chunks
-    const citedIndices = new Set();
-    const citationPattern = /\[(\d+)\]/g;
-    let match;
-    while ((match = citationPattern.exec(answer)) !== null) {
-      citedIndices.add(parseInt(match[1]) - 1);
-    }
-
-    // Build sources from cited chunks only
-    const sources = [];
-    const seenUrls = new Set();
-
-    if (data && data.chunks) {
-      citedIndices.forEach((index) => {
-        if (index < data.chunks.length) {
-          const chunk = data.chunks[index];
-          if (chunk.url && !seenUrls.has(chunk.url)) {
-            seenUrls.add(chunk.url);
-
-            let title = chunk.title || chunk.url.split('/').pop();
-            title = title
-              .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
-              .replace(/[_-]+/g, ' ')
-              .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-              .replace(/^(\w)/, (m) => m.toUpperCase())
-              .trim();
-
-            sources.push({ title, url: chunk.url });
-          }
-        }
-      });
-    }
-
     // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
@@ -129,11 +96,44 @@ exports.handler = async (event) => {
     // Target sentences that end with . ! ? and aren't headers
     let refNum = 1;
     answer = answer.replace(/([^#\n][.!?])(\s+)/g, (match, punct, space) => {
-      if (refNum <= sources.length) {
+      if (refNum <= data.chunks.length) {
         return `${punct} [${refNum++}]${space}`;
       }
       return match;
     });
+
+    // Now scan answer for [n] patterns to identify cited chunks
+    const citedIndices = new Set();
+    const citationPattern = /\[(\d+)\]/g;
+    let match;
+    while ((match = citationPattern.exec(answer)) !== null) {
+      citedIndices.add(parseInt(match[1]) - 1);
+    }
+
+    // Build sources from cited chunks only
+    const sources = [];
+    const seenUrls = new Set();
+
+    if (data && data.chunks) {
+      citedIndices.forEach((index) => {
+        if (index < data.chunks.length) {
+          const chunk = data.chunks[index];
+          if (chunk.url && !seenUrls.has(chunk.url)) {
+            seenUrls.add(chunk.url);
+
+            let title = chunk.title || chunk.url.split('/').pop();
+            title = title
+              .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+              .replace(/[_-]+/g, ' ')
+              .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+              .replace(/^(\w)/, (m) => m.toUpperCase())
+              .trim();
+
+            sources.push({ title, url: chunk.url });
+          }
+        }
+      });
+    }
 
     // Add downloads section first
     if (downloads.length > 0) {
