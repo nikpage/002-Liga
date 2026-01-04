@@ -58,7 +58,7 @@ exports.handler = async (event) => {
       return match;
     });
 
-    // Now scan answer for [n] patterns to identify cited chunks
+    // Scan answer for [n] patterns to identify cited chunks
     const citedIndices = new Set();
     const citationPattern = /\[(\d+)\]/g;
     let match;
@@ -77,38 +77,38 @@ exports.handler = async (event) => {
     const seenDownloads = new Set();
 
     if (fileUrls && fileUrls.length > 0) {
-      fileUrls.forEach((url) => {
-        if (!seenDownloads.has(url)) {
-          seenDownloads.add(url);
+          fileUrls.forEach((url) => {
+            if (!seenDownloads.has(url)) {
+              seenDownloads.add(url);
 
-          let title = null;
-          // 1. Priority: Find the document_title from the actual database chunks
-          const matchingChunk = data.chunks.find(chunk =>
-            (chunk.url === url) || (chunk.text && chunk.text.includes(url))
-          );
+              let title = null;
+              // 1. Priority: Find the document_title from the actual database chunks
+              const matchingChunk = data.chunks.find(chunk =>
+                (chunk.url === url) || (chunk.text && chunk.text.includes(url))
+              );
 
-          if (matchingChunk && matchingChunk.title) {
-            title = matchingChunk.title;
-          } else {
-            // 2. Fallback: Clean the filename from the URL string
-            title = decodeURIComponent(url.split('/').pop());
-          }
+              if (matchingChunk && matchingChunk.title) {
+                title = matchingChunk.title;
+              } else {
+                // 2. Fallback: Clean the filename from the URL string
+                title = decodeURIComponent(url.split('/').pop());
+              }
 
-          // 3. Final Polish: Apply strict Czech formatting and remove technical marks
-          title = title
-            .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-            .replace(/[_-]+/g, ' ')
-            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-            .replace(/uhrady zp/gi, 'Úhrady ZP')
-            .replace(/odvolani/gi, 'Odvolání')
-            .replace(/zadost/gi, 'Žádost')
-            .replace(/^(\w)/, (m) => m.toUpperCase())
-            .trim();
+              // 3. Final Polish: Apply strict Czech formatting and remove technical marks
+              title = title
+                .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+                .replace(/[_-]+/g, ' ')
+                .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+                .replace(/uhrady zp/gi, 'Úhrady ZP')
+                .replace(/odvolani/gi, 'Odvolání')
+                .replace(/zadost/gi, 'Žádost')
+                .replace(/^(\w)/, (m) => m.toUpperCase())
+                .trim();
 
-          downloads.push({ title, url });
+              downloads.push({ title, url });
+            }
+          });
         }
-      });
-    }
 
     // Build sources from cited chunks only
     const sources = [];
