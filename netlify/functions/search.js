@@ -48,50 +48,6 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Extract downloadable files from cited chunks only
-    const citedChunks = Array.from(citedIndices)
-      .filter(i => i < data.chunks.length)
-      .map(i => data.chunks[i]);
-
-    const fileUrls = getFileUrls(citedChunks);
-
-    const downloads = [];
-    const seenDownloads = new Set();
-
-    if (fileUrls && fileUrls.length > 0) {
-          fileUrls.forEach((url) => {
-            if (!seenDownloads.has(url)) {
-              seenDownloads.add(url);
-
-              let title = null;
-              // 1. Priority: Find the document_title from the actual database chunks
-              const matchingChunk = data.chunks.find(chunk =>
-                (chunk.url === url) || (chunk.text && chunk.text.includes(url))
-              );
-
-              if (matchingChunk && matchingChunk.title) {
-                title = matchingChunk.title;
-              } else {
-                // 2. Fallback: Clean the filename from the URL string
-                title = decodeURIComponent(url.split('/').pop());
-              }
-
-              // 3. Final Polish: Apply strict Czech formatting and remove technical marks
-              title = title
-                .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-                .replace(/[_-]+/g, ' ')
-                .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-                .replace(/uhrady zp/gi, 'Úhrady ZP')
-                .replace(/odvolani/gi, 'Odvolání')
-                .replace(/zadost/gi, 'Žádost')
-                .replace(/^(\w)/, (m) => m.toUpperCase())
-                .trim();
-
-              downloads.push({ title, url });
-            }
-          });
-        }
-
     // Add [1] after each sentence in content sections
     // Target sentences that end with . ! ? and aren't headers
     let refNum = 1;
@@ -108,6 +64,50 @@ exports.handler = async (event) => {
     let match;
     while ((match = citationPattern.exec(answer)) !== null) {
       citedIndices.add(parseInt(match[1]) - 1);
+    }
+
+    // Extract downloadable files from cited chunks only
+    const citedChunks = Array.from(citedIndices)
+      .filter(i => i < data.chunks.length)
+      .map(i => data.chunks[i]);
+
+    const fileUrls = getFileUrls(citedChunks);
+
+    const downloads = [];
+    const seenDownloads = new Set();
+
+    if (fileUrls && fileUrls.length > 0) {
+      fileUrls.forEach((url) => {
+        if (!seenDownloads.has(url)) {
+          seenDownloads.add(url);
+
+          let title = null;
+          // 1. Priority: Find the document_title from the actual database chunks
+          const matchingChunk = data.chunks.find(chunk =>
+            (chunk.url === url) || (chunk.text && chunk.text.includes(url))
+          );
+
+          if (matchingChunk && matchingChunk.title) {
+            title = matchingChunk.title;
+          } else {
+            // 2. Fallback: Clean the filename from the URL string
+            title = decodeURIComponent(url.split('/').pop());
+          }
+
+          // 3. Final Polish: Apply strict Czech formatting and remove technical marks
+          title = title
+            .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+            .replace(/uhrady zp/gi, 'Úhrady ZP')
+            .replace(/odvolani/gi, 'Odvolání')
+            .replace(/zadost/gi, 'Žádost')
+            .replace(/^(\w)/, (m) => m.toUpperCase())
+            .trim();
+
+          downloads.push({ title, url });
+        }
+      });
     }
 
     // Build sources from cited chunks only
