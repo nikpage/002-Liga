@@ -29,8 +29,7 @@ CONTENT RULES:
 
 DOWNLOADABLE FILES:
 - NEVER create a "Zdroje" or "Ke stažení" section.
-- At the end of every sentence using information, add a source tag: <source>1</source>, <source>2</source>.
-- Use the number matching the [Zdroj X] block provided in the context.
+- DO NOT use any source tags like <source> or [1].
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
@@ -51,7 +50,7 @@ FORMATTING RULES (ABSOLUTELY MANDATORY):
 
 **4. WRITE ONLY FACTS:**
 - Only clean information
-- Backend automatically adds references
+- Do not provide any citations or references in the text
 - Never show raw URLs like https://... in your text
 
 **5. RELEVANCE:**
