@@ -19,7 +19,8 @@ exports.getFullContext = async (embedding, query) => {
     id: r.id,
     text: r.content,
     title: r.document_title,
-    url: r.source_url
+    url: r.source_url,
+    downloads: r.downloads
   }));
 
   return { chunks };
