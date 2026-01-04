@@ -58,7 +58,12 @@ FORMATTING RULES (ABSOLUTELY MANDATORY):
 - Only list sources you referenced to write the answer
 - Use the numbers from [Zdroj 0], [Zdroj 1], etc.
 
-**6. RELEVANCE:**
+**6. TRACK DOWNLOADS YOU MENTION:**
+- In the JSON, include "used_download_urls": [array of download URLs you actually referenced]
+- Only include URLs of files that are relevant to answering this specific question
+- Use exact URLs from "Soubory ke stažení" in context
+
+**7. RELEVANCE:**
 - Answer ONLY what they ask
 - Do NOT include sources section - backend handles this
 
@@ -66,7 +71,8 @@ Return JSON:
 {
   "strucne": "1-2 sentences direct answer",
   "detaily": "# 💡 Shrnutí\nDirect answer.\n\n## Subheading\n• Item 1\n• Item 2\n• Item 3",
-  "used_sources": [0, 2, 5]
+  "used_sources": [0, 2, 5],
+  "used_download_urls": ["https://example.com/file.pdf"]
 }`;
 }
 
