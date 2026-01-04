@@ -4,6 +4,7 @@ const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
 exports.handler = async (event) => {
+  console.log("FUNCTION STARTED");
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -17,6 +18,7 @@ exports.handler = async (event) => {
 
   try {
     const { query } = JSON.parse(event.body);
+    console.log("QUERY:", query);
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
@@ -39,7 +41,10 @@ exports.handler = async (event) => {
     // Remove any leading/trailing whitespace or newlines
     cleanContent = cleanContent.replace(/^\s+|\s+$/g, "");
 
+    console.log("CLEAN CONTENT:", cleanContent);
+
     const result = JSON.parse(cleanContent);
+    console.log("PARSED RESULT:", result);
 
     // Get AI answer
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
@@ -108,7 +113,7 @@ exports.handler = async (event) => {
 
     // Get downloads directly from database chunks
     citedChunks.forEach(chunk => {
-      if (chunk.downloads && chunk.downloads.trim()) {
+      if (chunk.downloads && typeof chunk.downloads === 'string' && chunk.downloads.trim()) {
         const urls = chunk.downloads.split(/[\s,]+/).filter(u => u.trim());
         urls.forEach(url => {
           if (!seenDownloads.has(url) && url.match(/\.(pdf|docx?|xlsx?)$/i)) {
@@ -172,10 +177,12 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
+    console.error("ERROR:", err.message);
+    console.error("STACK:", err.stack);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ answer: "Chyba." })
+      body: JSON.stringify({ answer: "Chyba.", error: err.message })
     };
   }
 };
