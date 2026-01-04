@@ -66,49 +66,52 @@ exports.handler = async (event) => {
       citedIndices.add(parseInt(match[1]) - 1);
     }
 
-    // Extract downloadable files from cited chunks only
+    // Extract downloadable files from cited chunks using database downloads column
     const citedChunks = Array.from(citedIndices)
       .filter(i => i < data.chunks.length)
       .map(i => data.chunks[i]);
 
-    const fileUrls = getFileUrls(citedChunks);
+    // Helper function to format file titles with icons
+    const formatFileTitle = (url) => {
+      const ext = url.split('.').pop().toLowerCase();
+      let icon = '';
+
+      if (ext === 'pdf') icon = 'PDF 📄';
+      else if (ext === 'doc' || ext === 'docx') icon = 'Word 📝';
+      else if (ext === 'xlsx' || ext === 'xls') icon = 'Excel 📊';
+      else icon = '📎';
+
+      let title = decodeURIComponent(url.split('/').pop());
+      title = title
+        .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+        .replace(/uhrady zp/gi, 'Úhrady ZP')
+        .replace(/odvolani/gi, 'Odvolání')
+        .replace(/zadost/gi, 'Žádost')
+        .replace(/zadanka/gi, 'Žádánka')
+        .replace(/^(\w)/, (m) => m.toUpperCase())
+        .trim();
+
+      return `${icon} ${title}`;
+    };
 
     const downloads = [];
     const seenDownloads = new Set();
 
-    if (fileUrls && fileUrls.length > 0) {
-          fileUrls.forEach((url) => {
-            if (!seenDownloads.has(url)) {
-              seenDownloads.add(url);
-
-              let title = null;
-              // 1. Priority: Find the document_title from the actual database chunks
-              const matchingChunk = data.chunks.find(chunk =>
-                (chunk.url === url) || (chunk.text && chunk.text.includes(url))
-              );
-
-              if (matchingChunk && matchingChunk.title) {
-                title = matchingChunk.title;
-              } else {
-                // 2. Fallback: Clean the filename from the URL string
-                title = decodeURIComponent(url.split('/').pop());
-              }
-
-              // 3. Final Polish: Apply strict Czech formatting and remove technical marks
-              title = title
-                .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-                .replace(/[_-]+/g, ' ')
-                .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-                .replace(/uhrady zp/gi, 'Úhrady ZP')
-                .replace(/odvolani/gi, 'Odvolání')
-                .replace(/zadost/gi, 'Žádost')
-                .replace(/^(\w)/, (m) => m.toUpperCase())
-                .trim();
-
-              downloads.push({ title, url });
-            }
-          });
-        }
+    // Get downloads directly from database chunks
+    citedChunks.forEach(chunk => {
+      if (chunk.downloads && chunk.downloads.trim()) {
+        const urls = chunk.downloads.split(/[\s,]+/).filter(u => u.trim());
+        urls.forEach(url => {
+          if (!seenDownloads.has(url) && url.match(/\.(pdf|docx?|xlsx?)$/i)) {
+            seenDownloads.add(url);
+            const title = formatFileTitle(url);
+            downloads.push({ title, url });
+          }
+        });
+      }
+    });
 
     // Build sources from cited chunks only
     const sources = [];
