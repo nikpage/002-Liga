@@ -20,9 +20,8 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    const fileUrls = getFileUrls(data.chunks.slice(0, 10));
 
-    console.log("FILE URLS:", JSON.stringify(fileUrls, null, 2));
+    console.log("FILE URLS will be extracted after answer generation");
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
@@ -35,24 +34,35 @@ exports.handler = async (event) => {
       extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
     );
 
-    // Build sources from actual retrieved chunks (max 5)
+    // Scan answer for [n] patterns to identify cited chunks
+    const citedIndices = new Set();
+    const citationPattern = /\[(\d+)\]/g;
+    let match;
+    while ((match = citationPattern.exec(answer)) !== null) {
+      citedIndices.add(parseInt(match[1]) - 1);
+    }
+
+    // Build sources from cited chunks only
     const sources = [];
     const seenUrls = new Set();
 
     if (data && data.chunks) {
-      data.chunks.forEach((chunk) => {
-        if (chunk.url && !seenUrls.has(chunk.url) && sources.length < 5) {
-          seenUrls.add(chunk.url);
+      citedIndices.forEach((index) => {
+        if (index < data.chunks.length) {
+          const chunk = data.chunks[index];
+          if (chunk.url && !seenUrls.has(chunk.url)) {
+            seenUrls.add(chunk.url);
 
-          let title = chunk.title || chunk.url.split('/').pop();
-          title = title
-            .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
-            .replace(/[_-]+/g, ' ')
-            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-            .replace(/^(\w)/, (m) => m.toUpperCase())
-            .trim();
+            let title = chunk.title || chunk.url.split('/').pop();
+            title = title
+              .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
+              .replace(/[_-]+/g, ' ')
+              .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+              .replace(/^(\w)/, (m) => m.toUpperCase())
+              .trim();
 
-          sources.push({ title, url: chunk.url });
+            sources.push({ title, url: chunk.url });
+          }
         }
       });
     }
@@ -71,7 +81,13 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Extract downloadable files and match to document titles
+    // Extract downloadable files from cited chunks only
+    const citedChunks = Array.from(citedIndices)
+      .filter(i => i < data.chunks.length)
+      .map(i => data.chunks[i]);
+
+    const fileUrls = getFileUrls(citedChunks);
+
     const downloads = [];
     const seenDownloads = new Set();
 
@@ -119,19 +135,19 @@ exports.handler = async (event) => {
       return match;
     });
 
-    // Add source section
+    // Add downloads section first
+    if (downloads.length > 0) {
+      answer += `\n\n---\n# 📥 Ke stažení\n\n`;
+      downloads.forEach(d => {
+        answer += `* [${d.title}](${d.url})\n`;
+      });
+    }
+
+    // Add source section second
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
       sources.forEach((s, i) => {
         answer += `${i + 1}. [${s.title}](${s.url})\n`;
-      });
-    }
-
-    // Add downloads section
-    if (downloads.length > 0) {
-      answer += `\n\n---\n# 📥 Ke stažení\n\n`;
-      downloads.forEach(d => {
-        answer += `• [${d.title}](${d.url})\n`;
       });
     }
 
