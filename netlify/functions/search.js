@@ -1,5 +1,5 @@
 const { getEmb, getAnswer } = require('./ai-client');
-const { getFullContext, getFileUrls } = require('./database');
+const { getFullContext } = require('./database');
 const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
@@ -20,8 +20,6 @@ exports.handler = async (event) => {
 
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-
-    console.log("FILE URLS will be extracted after answer generation");
 
     const extractPrompt = buildExtractionPrompt(query, data);
     const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
