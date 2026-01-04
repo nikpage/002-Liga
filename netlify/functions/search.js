@@ -47,6 +47,9 @@ exports.handler = async (event) => {
     // Get the sources the AI actually used
     const usedSourceIndices = result.used_sources || [];
 
+    // Get the download URLs the AI explicitly said are relevant
+    const usedDownloadUrls = result.used_download_urls || [];
+
     // Filter chunks to only those the AI used
     const citedChunks = usedSourceIndices
       .map(idx => data.chunks[idx])
@@ -58,7 +61,10 @@ exports.handler = async (event) => {
     citedChunks.forEach(chunk => {
       if (chunk.downloads && Array.isArray(chunk.downloads)) {
         chunk.downloads.forEach(item => {
-          if (item.source_url && !seenDownloads.has(item.source_url)) {
+          // Only add if AI explicitly said this URL is relevant
+          if (item.source_url &&
+              !seenDownloads.has(item.source_url) &&
+              usedDownloadUrls.includes(item.source_url)) {
             seenDownloads.add(item.source_url);
 
             const ext = item.source_url.split('.').pop().toLowerCase();
