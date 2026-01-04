@@ -11,9 +11,15 @@ exports.getFullContext = async (embedding, query) => {
     query_embedding: embedding,
     match_threshold: 0.45,
     match_count: 30
+  }, {
+    head: false,
+    count: null
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error("SUPABASE RPC ERROR:", error);
+    throw error;
+  }
 
   const chunks = (data || []).map(r => ({
     id: r.id,
