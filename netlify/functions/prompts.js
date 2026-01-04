@@ -1,7 +1,7 @@
 function buildExtractionPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
-    return `[Zdroj ${i+1}]\nNázev: ${c.title}\nURL: ${c.url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}\nObsah: ${c.text}\n`;
+    return `[Zdroj ${i}]\nNázev: ${c.title}\nURL: ${c.url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}\nObsah: ${c.text}\n`;
   }).join("\n---\n\n");
 
   return `You are an expert on social assistance for people with disabilities. You answer in Czech.
@@ -53,14 +53,20 @@ FORMATTING RULES (ABSOLUTELY MANDATORY):
 - Do not provide any citations or references in the text
 - Never show raw URLs like https://... in your text
 
-**5. RELEVANCE:**
+**5. TRACK YOUR SOURCES:**
+- In the JSON, include "used_sources": [array of source numbers you actually used]
+- Only list sources you referenced to write the answer
+- Use the numbers from [Zdroj 0], [Zdroj 1], etc.
+
+**6. RELEVANCE:**
 - Answer ONLY what they ask
 - Do NOT include sources section - backend handles this
 
 Return JSON:
 {
   "strucne": "1-2 sentences direct answer",
-  "detaily": "# 💡 Shrnutí\nDirect answer.\n\n## Subheading\n• Item 1\n• Item 2\n• Item 3"
+  "detaily": "# 💡 Shrnutí\nDirect answer.\n\n## Subheading\n• Item 1\n• Item 2\n• Item 3",
+  "used_sources": [0, 2, 5]
 }`;
 }
 
