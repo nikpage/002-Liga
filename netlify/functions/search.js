@@ -94,14 +94,16 @@ exports.handler = async (event) => {
           // Fallback: extract from URL
           if (!title) {
             title = url.split('/').pop();
-            title = decodeURIComponent(title)
-              .replace(/\.(pdf|docx?|xlsx?)$/i, '')
-              .replace(/[_-]+/g, ' ')
-              .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
-              .replace(/uhrady zp/gi, 'Úhrady ZP')
-              .replace(/^(\w)/, (m) => m.toUpperCase())
-              .trim();
           }
+
+          // Clean the title
+          title = decodeURIComponent(title)
+            .replace(/\.(pdf|docx?|xlsx?)$/i, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/pujcovny pomucek/gi, 'Půjčovny pomůcek')
+            .replace(/uhrady zp/gi, 'Úhrady ZP')
+            .replace(/^(\w)/, (m) => m.toUpperCase())
+            .trim();
 
           downloads.push({ title, url });
         }
