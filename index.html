@@ -33,8 +33,8 @@
         }
         .bot-msg h2 { font-size: 1.1rem; margin-top: 1rem; }
         .bot-msg ul, .bot-msg ol { padding-left: 1.25rem; margin-bottom: 0.75rem; }
-        .bot-msg li { margin-bottom: 0.5rem; }
-        .bot-msg p { margin-bottom: 0.75rem; }
+        .bot-msg li { margin-bottom: 0.75rem; }
+        .bot-msg p { margin-bottom: 1.25rem; line-height: 1.6; }
 
         .msg-toolbar {
             display: flex;
@@ -166,12 +166,15 @@
 
         /**
          * Sanitizes and formats the AI response before rendering.
-         * Converts raw URLs into readable titles and removes unused formatting markers.
+         * Converts raw URLs in bullet points to readable markdown links by:
+         * - Extracting filename from URL path
+         * - Removing file extensions (.pdf, .docx, etc.)
+         * - Replacing underscores and hyphens with spaces
+         * - Capitalizing first letter to create clean title
          */
         function normalizeAnswer(md, sources) {
             if (!md) return md;
 
-            // Convert raw URLs in bullet points to readable link text
             md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
                 const filename = url.split('/').pop();
                 const title = filename

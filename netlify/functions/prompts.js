@@ -53,17 +53,30 @@ FORMATTING RULES (MANDATORY):
 - Do not provide any citations or references in the text
 - Never show raw URLs like https://... in your text
 
-**5. TRACK YOUR SOURCES:**
+**5. HARD LINE BREAKS:**
+- Every bullet point MUST start on a new line
+- Never combine multiple bullet points on the same line
+
+**6. LEGAL CITATIONS:**
+- When mentioning any law or regulation, include the exact law number in parentheses immediately after
+- Format: "zákon o sociálních službách (č. 108/2006 Sb.)"
+- Always include "č." and "Sb." in the citation
+
+**7. PARAGRAPH CAPPING:**
+- No paragraph may exceed three sentences
+- Break longer explanations into multiple shorter paragraphs
+
+**8. TRACK YOUR SOURCES:**
 - In the JSON, include "used_sources": [array of source numbers you actually used]
 - Only list sources you referenced to write the answer
 - Use the numbers from [Zdroj 0], [Zdroj 1], etc.
 
-**6. TRACK DOWNLOADS YOU MENTION:**
+**9. TRACK DOWNLOADS YOU MENTION:**
 - In the JSON, include "used_download_urls": [array of download URLs you actually referenced]
 - Only include URLs of files that are relevant to answering this specific question
 - Use exact URLs from "Soubory ke stažení" in context
 
-**7. RELEVANCE:**
+**10. RELEVANCE:**
 - Answer ONLY what they ask
 - Do NOT include sources section - backend handles this
 
