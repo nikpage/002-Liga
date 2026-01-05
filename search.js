@@ -4,11 +4,22 @@ const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
 exports.search = async (payload) => {
+  const startTime = Date.now();
   try {
     const { query } = payload;
+
+    const embStart = Date.now();
     const vector = await getEmb(query);
+    console.log(`Embedding: ${Date.now() - embStart}ms`);
+
+    const dbStart = Date.now();
     const data = await getFullContext(vector, query);
+    console.log(`Database fetch: ${Date.now() - dbStart}ms`);
+
+    const aiStart = Date.now();
     const extractResponse = await getAnswer(cfg.chatModel, [], buildExtractionPrompt(query, data));
+    console.log(`AI response: ${Date.now() - aiStart}ms`);
+
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
     let result;
@@ -57,6 +68,7 @@ exports.search = async (payload) => {
       sources.forEach((s, i) => { answer += `${i + 1}. [${s.title}](${s.url})\n`; });
     }
 
+    console.log(`Total request time: ${Date.now() - startTime}ms`);
     return { answer, downloads, metadata: { sources } };
   } catch (err) {
     throw err;
