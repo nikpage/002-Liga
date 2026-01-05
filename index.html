@@ -23,7 +23,6 @@
         .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
         .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 4.5rem !important; }
 
-        /* Layout for AI-generated messages and markdown elements */
         .bot-msg h1 {
             font-size: 1.25rem;
             margin: 1rem 0 0.5rem 0;
@@ -167,14 +166,6 @@
             downloadFile('chat_historie.txt', text);
         }
 
-        /**
-         * Sanitizes and formats the AI response before rendering.
-         * Converts raw URLs in bullet points to readable markdown links by:
-         * - Extracting filename from URL path
-         * - Removing file extensions (.pdf, .docx, etc.)
-         * - Replacing underscores and hyphens with spaces
-         * - Capitalizing first letter to create clean title
-         */
         function normalizeAnswer(md, sources) {
             if (!md) return md;
 
@@ -254,13 +245,12 @@
             progressIndicator.style.display = 'block';
 
             try {
-                const response = await fetch('/.netlify/functions/search', {
+                const response = await fetch('https://002-liga-production.up.railway.app/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         query: "Odpovídej pouze v češtině. Dotaz: " + query,
-                        history: chatHistory,
-                        model: "gemini-2.0-flash-lite"
+                        history: chatHistory
                     })
                 });
 
