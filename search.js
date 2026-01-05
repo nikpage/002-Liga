@@ -3,36 +3,22 @@ const { getFullContext } = require('./database');
 const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
-// This function now talks directly to server.js
 exports.search = async (payload) => {
   try {
     const { query } = payload;
-
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-
-    const extractPrompt = buildExtractionPrompt(query, data);
-    const extractResponse = await getAnswer(cfg.chatModel, [], extractPrompt);
+    const extractResponse = await getAnswer(cfg.chatModel, [], buildExtractionPrompt(query, data));
     const extractContent = extractResponse.candidates[0].content.parts[0].text;
 
     let result;
-    try {
-      const jsonMatch = extractContent.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Invalid response format");
-      result = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      result = { detaily: extractContent, used_sources: [], used_download_urls: [] };
-    }
+    const jsonMatch = extractContent.match(/\{[\s\S]*\}/);
+    result = jsonMatch ? JSON.parse(jsonMatch[0]) : { detaily: extractContent };
 
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
-    // Clean up filenames
     answer = answer.replace(/\b[\w-]+\.(pdf|docx?|xlsx?|txt)\b/gi, (match) => {
-      return match
-        .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
-        .replace(/[_-]+/g, ' ')
-        .replace(/^(\w)/, (m) => m.toUpperCase())
-        .trim();
+      return match.replace(/\.(pdf|docx?|xlsx?|txt)$/i, '').replace(/[_-]+/g, ' ').replace(/^(\w)/, (m) => m.toUpperCase()).trim();
     });
 
     const usedSourceIndices = result.used_sources || [];
@@ -72,9 +58,7 @@ exports.search = async (payload) => {
     }
 
     return { answer, downloads, metadata: { sources } };
-
   } catch (err) {
-    console.error("Search Error:", err);
     throw err;
   }
 };
