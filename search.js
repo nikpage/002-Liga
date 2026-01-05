@@ -17,6 +17,10 @@ exports.search = async (payload) => {
 
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
+    answer = answer.replace(/\b[\w-]+\.(pdf|docx?|xlsx?|txt)\b/gi, (match) => {
+      return match.replace(/\.(pdf|docx?|xlsx?|txt)$/i, '').replace(/[_-]+/g, ' ').replace(/^(\w)/, (m) => m.toUpperCase()).trim();
+    });
+
     const usedSourceIndices = result.used_sources || [];
     const usedDownloadUrls = result.used_download_urls || [];
     const citedChunks = usedSourceIndices.map(idx => data.chunks[idx]).filter(c => c !== undefined);
@@ -37,9 +41,9 @@ exports.search = async (payload) => {
     const sources = [];
     const seenUrls = new Set();
     citedChunks.forEach((chunk) => {
-      if (chunk.source_url && !seenUrls.has(chunk.source_url)) {
-        seenUrls.add(chunk.source_url);
-        sources.push({ title: (chunk.document_title || "Zdroj"), url: chunk.source_url });
+      if (chunk.url && !seenUrls.has(chunk.url)) {
+        seenUrls.add(chunk.url);
+        sources.push({ title: (chunk.title || "Zdroj").replace(/\.[^/.]+$/, ""), url: chunk.url });
       }
     });
 
