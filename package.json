@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "search.js",
   "scripts": {
-    "start": "functions-framework --target=search"
+    "start": "functions-framework --target=search --port=${PORT:-8080}"
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^3.5.1",
