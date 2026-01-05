@@ -27,7 +27,6 @@ exports.handler = async (event) => {
 
     console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
     console.log("AI RESPONSE:", extractContent);
-    console.log("Raw AI Response:", JSON.stringify(extractContent));
 
     /**
      * Extracts and parses the JSON block from the AI response.
@@ -73,18 +72,11 @@ exports.handler = async (event) => {
               usedDownloadUrls.includes(item.source_url)) {
             seenDownloads.add(item.source_url);
 
-            const ext = item.source_url.split('.').pop().toLowerCase();
-            let icon = '';
-            if (ext === 'pdf') icon = '📄';
-            else if (ext === 'doc' || ext === 'docx') icon = '📝';
-            else if (ext === 'xlsx' || ext === 'xls') icon = '📊';
-            else icon = '📎';
-
             let cleanName = item.file_name.replace(/\.[^/.]+$/, "")
                                 .replace(/zadanka/gi, 'Žádanka')
                                 .replace(/uhrady/gi, 'Úhrady');
 
-            const title = `${icon} ${cleanName}`;
+            const title = cleanName;
             downloads.push({ title, url: item.source_url });
           }
         });
