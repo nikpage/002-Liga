@@ -29,7 +29,6 @@ CONTENT RULES:
 
 DOWNLOADABLE FILES:
 - NEVER create a "Zdroje" or "Ke stažení" section.
-- DO NOT use any source tags like <source> or [1].
 
 FORMATTING RULES (ABSOLUTELY MANDATORY):
 
