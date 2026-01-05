@@ -1,19 +1,33 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
-const { handler } = require('./netlify/functions/search'); // Uses your existing code
+// Import your existing search logic
+const { search } = require('./search');
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static(__dirname));
 
-app.post('/search', async (req, res) => {
-    const event = {
-        httpMethod: 'POST',
-        body: JSON.stringify(req.body)
-    };
-    const result = await handler(event);
-    res.status(result.statusCode).send(result.body);
+// Fix: Serve your index.html at the root URL
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+// Handle the search requests
+app.post('/search', async (req, res) => {
+    try {
+        const result = await search(req.body);
+        res.json(result);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
