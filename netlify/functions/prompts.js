@@ -43,10 +43,12 @@ FORMATTING RULES (MANDATORY):
 - Text starts on NEXT line
 - Max 1-2 words after emoji
 - Examples: "# 💡 Shrnutí", "# 📥 Ke stažení", "# 📄 Zdroje"
+- MUST have double newline (`\n\n`) before and after the header
 
 **3. OTHER HEADINGS = H2/H3:**
 - Use ## for main subheadings
 - Use ### for smaller subheadings
+- MUST have double newline (`\n\n`) before and after each heading
 
 **4. WRITE ONLY FACTS:**
 - Only clean information
@@ -54,7 +56,7 @@ FORMATTING RULES (MANDATORY):
 - Never show raw URLs like https://... in your text
 
 **5. HARD LINE BREAKS:**
-- Every bullet point MUST start on a new line
+- Every bullet point MUST be preceded and followed by a double newline (`\n\n`) to ensure the Markdown parser renders a `<ul>` list
 - Never combine multiple bullet points on the same line
 
 **6. LEGAL CITATIONS:**
@@ -64,7 +66,7 @@ FORMATTING RULES (MANDATORY):
 
 **7. PARAGRAPH CAPPING:**
 - No paragraph may exceed three sentences
-- Break longer explanations into multiple shorter paragraphs
+- Use double newlines (`\n\n`) between every paragraph
 
 **8. TRACK YOUR SOURCES:**
 - In the JSON, include "used_sources": [array of source numbers you actually used]
