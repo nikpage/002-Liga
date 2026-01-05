@@ -44,6 +44,10 @@ exports.handler = async (event) => {
 
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
+    /**
+     * Cleans up file extension references in the text while preserving structural whitespace.
+     * This regex targets only filename patterns and does not modify newlines or line breaks.
+     */
     answer = answer.replace(/\b[\w-]+\.(pdf|docx?|xlsx?|txt)\b/gi, (match) => {
       return match
         .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
