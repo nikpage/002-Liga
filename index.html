@@ -35,6 +35,7 @@
         .bot-msg ul, .bot-msg ol { padding-left: 1.25rem; margin-bottom: 0.75rem; }
         .bot-msg li { margin-bottom: 0.75rem; }
         .bot-msg p { margin-bottom: 1.25rem; line-height: 1.6; }
+        .bot-msg a { text-decoration: underline; text-decoration-skip-ink: auto; }
 
         .msg-toolbar {
             display: flex;
@@ -145,8 +146,6 @@
     </div>
 
     <script>
-        marked.setOptions({ breaks: true });
-
         let chatHistory = [];
         const progressIndicator = document.getElementById('progress-indicator');
 
