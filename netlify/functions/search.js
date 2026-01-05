@@ -28,9 +28,19 @@ exports.handler = async (event) => {
     console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
     console.log("AI RESPONSE:", extractContent);
 
-    const result = JSON.parse(
-      extractContent.replace(/```json/g, "").replace(/```/g, "").trim()
-    );
+    /**
+     * Extracts and parses the JSON block from the AI response.
+     * Uses a regular expression to locate the JSON structure regardless of surrounding text.
+     */
+    let result;
+    try {
+      const jsonMatch = extractContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Invalid response format");
+      result = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error("Parse Failure:", e);
+      result = { detaily: extractContent, used_sources: [], used_download_urls: [] };
+    }
 
     let answer = result.detaily || result.strucne || "Bohužel nemám informace.";
 
@@ -44,13 +54,9 @@ exports.handler = async (event) => {
         .trim();
     });
 
-    // Get the sources the AI actually used
     const usedSourceIndices = result.used_sources || [];
-
-    // Get the download URLs the AI explicitly said are relevant
     const usedDownloadUrls = result.used_download_urls || [];
 
-    // Filter chunks to only those the AI used
     const citedChunks = usedSourceIndices
       .map(idx => data.chunks[idx])
       .filter(chunk => chunk !== undefined);
@@ -61,7 +67,6 @@ exports.handler = async (event) => {
     citedChunks.forEach(chunk => {
       if (chunk.downloads && Array.isArray(chunk.downloads)) {
         chunk.downloads.forEach(item => {
-          // Only add if AI explicitly said this URL is relevant
           if (item.source_url &&
               !seenDownloads.has(item.source_url) &&
               usedDownloadUrls.includes(item.source_url)) {

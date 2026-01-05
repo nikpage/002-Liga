@@ -21,7 +21,20 @@
 
         .message { margin-bottom: 20px; padding: 15px; border-radius: 15px; max-width: 85%; line-height: 1.6; position: relative; }
         .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 50px; }
+        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 4.5rem !important; }
+
+        /* Layout for AI-generated messages and markdown elements */
+        .bot-msg h1 {
+            font-size: 1.25rem;
+            margin: 1rem 0 0.5rem 0;
+            color: #007bff;
+            border-bottom: 1px solid #e4e6eb;
+            padding-bottom: 4px;
+        }
+        .bot-msg h2 { font-size: 1.1rem; margin-top: 1rem; }
+        .bot-msg ul, .bot-msg ol { padding-left: 1.25rem; margin-bottom: 0.75rem; }
+        .bot-msg li { margin-bottom: 0.5rem; }
+        .bot-msg p { margin-bottom: 0.75rem; }
 
         .msg-toolbar {
             display: flex;
@@ -74,7 +87,6 @@
             white-space: nowrap;
         }
 
-        /* REALIGNED CONTROLS */
         .controls-area {
             display: flex;
             gap: 10px;
@@ -152,113 +164,5 @@
             downloadFile('chat_historie.txt', text);
         }
 
-        function normalizeAnswer(md, sources) {
-            if (!md) return md;
-
-            // 1. Keep emoji sections as-is (they're already H1 from backend)
-
-            // 2. Convert raw URLs to readable link text (for any strays)
-            md = md.replace(/^[•*-]\s*(https?:\/\/\S+)/gm, (match, url) => {
-                const filename = url.split('/').pop();
-                const title = filename
-                    .replace(/\.(pdf|docx?|xlsx?|txt)$/i, '')
-                    .replace(/[_-]+/g, ' ')
-                    .replace(/^(\w)/, (m) => m.toUpperCase())
-                    .trim();
-                return `- [${title}](${url})`;
-            });
-
-            return md.trim();
-        }
-
-        function addMessage(role, content, sources) {
-            const msgs = document.getElementById('messages');
-            const newMsg = document.createElement('div');
-            newMsg.classList.add('message', role === 'user' ? 'user-msg' : 'bot-msg');
-
-            // Apply normalization for bot messages
-            if (role === 'assistant') {
-                content = normalizeAnswer(content, sources);
-            }
-
-            newMsg.innerHTML = marked.parse(content);
-
-            if (role === 'assistant') {
-                const toolbar = document.createElement('div');
-                toolbar.className = 'msg-toolbar';
-                const dlReplyBtn = document.createElement('button');
-                dlReplyBtn.className = 'tool-btn';
-                dlReplyBtn.innerHTML = '💾 Odpověď';
-                dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
-                const dlChatBtn = document.createElement('button');
-                dlChatBtn.className = 'tool-btn';
-                dlChatBtn.innerHTML = '📂 Celý chat';
-                dlChatBtn.onclick = () => downloadHistory();
-                toolbar.appendChild(dlReplyBtn);
-                toolbar.appendChild(dlChatBtn);
-                newMsg.appendChild(toolbar);
-            }
-
-            msgs.appendChild(newMsg);
-            if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            return newMsg;
-        }
-
-        function addSuggestions(suggestions) {
-            if (!suggestions || suggestions.length === 0) return;
-            const msgs = document.getElementById('messages');
-            const container = document.createElement('div');
-            container.className = 'suggestions-container';
-            suggestions.forEach(text => {
-                const btn = document.createElement('button');
-                btn.className = 'suggestion-btn';
-                btn.textContent = text;
-                btn.onclick = () => ask(text);
-                container.appendChild(btn);
-            });
-            msgs.appendChild(container);
-        }
-
-        async function ask(suggestionText = null) {
-            const input = document.getElementById('query');
-            const btn = document.getElementById('sendBtn');
-            const query = suggestionText || input.value.trim();
-            if (!query) return;
-
-            addMessage('user', query);
-            input.value = '';
-            btn.disabled = true;
-            chatHistory.push({ role: "user", content: query });
-
-            const oldSuggestions = document.querySelectorAll('.suggestions-container');
-            oldSuggestions.forEach(el => el.style.display = 'none');
-            progressIndicator.style.display = 'block';
-
-            try {
-                const response = await fetch('/.netlify/functions/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        query: "Odpovídej pouze v češtině. Dotaz: " + query,
-                        history: chatHistory,
-                        model: "gemini-2.0-flash-lite"
-                    })
-                });
-
-                const data = await response.json();
-                progressIndicator.style.display = 'none';
-                const sources = data.metadata && data.metadata.sources ? data.metadata.sources : [];
-                const answerElement = addMessage('assistant', data.answer, sources);
-                chatHistory.push({ role: "assistant", content: data.answer });
-                if (data.suggestions) addSuggestions(data.suggestions);
-                setTimeout(() => { answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
-            } catch (error) {
-                progressIndicator.style.display = 'none';
-                addMessage('assistant', 'CHYBA SYSTÉMU: Zkontrolujte připojení.');
-            } finally {
-                btn.disabled = false;
-            }
-        }
-    </script>
-</body>
-</html>
+        /**
+         * Sanit

@@ -16,7 +16,11 @@ ${ctx}
 QUERY: ${query}
 
 CONTENT RULES:
-- If context has the answer, use it
+- Use provided context to answer the user query.
+- PROHIBITED: Do not use inline citations (e.g., [1], [Source 0]).
+- PROHIBITED: Do not include textual references to sources (e.g., "According to...", "Source: ...").
+- PROHIBITED: Never display raw URLs in the text body.
+- If information is not in the context, state that clearly.
 - If question is general ("what documents"), summarize what's available
 - If question is specific ("where wheelchair"), give precise answer
 - Always include contacts, addresses, phones if in context
@@ -27,10 +31,7 @@ CONTENT RULES:
   • Mention other cities only when it makes sense or when user explicitly wants broader overview
 - Be selective: Don't list all 20 organizations if 3-5 relevant ones suffice
 
-DOWNLOADABLE FILES:
-- NEVER create a "Zdroje" or "Ke stažení" section.
-
-FORMATTING RULES (ABSOLUTELY MANDATORY):
+FORMATTING RULES (MANDATORY):
 
 **1. SUMMARY = SHORT:**
 - Max 2-3 sentences
