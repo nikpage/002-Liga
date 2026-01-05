@@ -1,7 +1,7 @@
+const fetch = require('node-fetch');
 const { google: cfg } = require("./config");
 
 async function getEmb(text) {
-  // Fixed: Forced outputDimensionality to exactly 1536
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -16,7 +16,6 @@ async function getEmb(text) {
   if (!res.ok) throw new Error(`Google Embedding Error: ${data.error?.message || res.statusText}`);
   if (!data.embedding) throw new Error("Google API returned no embedding.");
 
-  // Verification: Ensure the array length is exactly 1536
   if (data.embedding.values.length !== 1536) {
     throw new Error(`Dimension Mismatch: API returned ${data.embedding.values.length}, expected 1536.`);
   }
