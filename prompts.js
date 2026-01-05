@@ -42,7 +42,7 @@ FORMATTING RULES (MANDATORY):
 - Format: "# 💡 Text" on its own line (any emoji)
 - Text starts on NEXT line
 - Max 1-2 words after emoji
-- Examples: "# 💡 Shrnutí", "# 📥 Ke stažení", "# 📄 Zdroje"
+- Examples: "# 💡 Shrnutí", "# 🔥 Ke stažení", "# 📄 Zdroje"
 - MUST have blank line before and after the header
 
 **3. OTHER HEADINGS = H2/H3:**
@@ -69,13 +69,13 @@ FORMATTING RULES (MANDATORY):
 - Every paragraph MUST be separated by double newlines
 
 **8. TRACK YOUR SOURCES:**
+- As you write each fact, note which source number it came from
 - In the JSON, include "used_sources": [array of source numbers you actually used]
-- Only list sources you referenced to write the answer
 - Use the numbers from [Zdroj 0], [Zdroj 1], etc.
 
-**9. TRACK DOWNLOADS YOU MENTION:**
-- In the JSON, include "used_download_urls": [array of download URLs you actually referenced]
-- Only include URLs of files that are relevant to answering this specific question
+**9. INCLUDE ALL DOWNLOADS FROM USED SOURCES:**
+- In the JSON, include "used_download_urls": [array of all download URLs from sources in used_sources]
+- Automatically include every download URL from any source listed in used_sources
 - Use exact URLs from "Soubory ke stažení" in context
 
 **10. RELEVANCE:**
