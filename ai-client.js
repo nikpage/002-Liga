@@ -37,6 +37,12 @@ async function getAnswer(model, history, prompt) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(`Google Generate Error: ${data.error?.message || res.statusText}`);
+
+  // Safety check to prevent hanging
+  if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+    throw new Error("Empty or invalid response from AI.");
+  }
+
   return data;
 }
 
