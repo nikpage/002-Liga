@@ -245,7 +245,7 @@
             progressIndicator.style.display = 'block';
 
             try {
-                const response = await fetch('https://002-liga-production.up.railway.app/search', {
+                const response = await fetch('/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

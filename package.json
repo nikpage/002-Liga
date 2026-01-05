@@ -2,17 +2,11 @@
   "name": "002-liga-qa",
   "version": "1.0.0",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "scripts": { "start": "node server.js" },
   "dependencies": {
     "express": "^4.18.2",
-    "@google-cloud/functions-framework": "^3.5.1",
-    "@supabase/supabase-js": "^2.89.0",
-    "axios": "^1.13.2",
+    "@supabase/supabase-js": "^2.39.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "neo4j-driver": "^5.28.2",
-    "node-fetch": "2"
+    "node-fetch": "^2.7.0"
   }
 }
