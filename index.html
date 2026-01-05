@@ -168,18 +168,6 @@
                 return `- [${title}](${url})`;
             });
 
-            // 3. Convert numbered references [1] [2] to clickable links with titles
-            if (sources && sources.length > 0) {
-                md = md.replace(/\[(\d+)\]/g, (match, num) => {
-                    const idx = parseInt(num) - 1;
-                    if (idx >= 0 && idx < sources.length) {
-                        const src = sources[idx];
-                        return `<a href="${src.url}" target="_blank" title="${src.title}">[${num}]</a>`;
-                    }
-                    return match;
-                });
-            }
-
             return md.trim();
         }
 
