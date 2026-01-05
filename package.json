@@ -13,6 +13,6 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "neo4j-driver": "^5.28.2",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "2"
   }
 }
