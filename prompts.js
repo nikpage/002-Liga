@@ -1,7 +1,7 @@
 function buildExtractionPrompt(query, data) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
-    return `[Zdroj ${i}]\nNázev: ${c.title}\nURL: ${c.url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}\nObsah: ${c.text}\n`;
+    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}\nObsah: ${c.content}\n`;
   }).join("\n---\n\n");
 
   return `You are an expert on social assistance for people with disabilities. You answer in Czech.

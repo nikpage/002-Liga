@@ -41,9 +41,12 @@ exports.search = async (payload) => {
     const sources = [];
     const seenUrls = new Set();
     citedChunks.forEach((chunk) => {
-      if (chunk.url && !seenUrls.has(chunk.url)) {
-        seenUrls.add(chunk.url);
-        sources.push({ title: (chunk.title || "Zdroj").replace(/\.[^/.]+$/, ""), url: chunk.url });
+      if (chunk.source_url && !seenUrls.has(chunk.source_url)) {
+        seenUrls.add(chunk.source_url);
+        sources.push({
+          title: (chunk.document_title || "Zdroj").replace(/\.[^/.]+$/, ""),
+          url: chunk.source_url
+        });
       }
     });
 
