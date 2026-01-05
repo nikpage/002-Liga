@@ -27,6 +27,7 @@ exports.handler = async (event) => {
 
     console.log("CHUNKS:", JSON.stringify(data.chunks, null, 2));
     console.log("AI RESPONSE:", extractContent);
+    console.log("Raw AI Response:", JSON.stringify(extractContent));
 
     /**
      * Extracts and parses the JSON block from the AI response.
