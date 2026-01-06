@@ -1,7 +1,8 @@
 try {
-  require('dotenv').config();
+    require('dotenv').config();
 } catch (e) {
-
+    // Railway handles variables natively; this prevents the crash
+}
 
 const express = require('express');
 const path = require('path');
