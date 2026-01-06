@@ -21,13 +21,5 @@ exports.getFullContext = async (embedding, query) => {
     throw error;
   }
 
-  const chunks = (data || []).map(r => ({
-    id: r.id,
-    text: r.content,
-    title: r.document_title,
-    url: r.source_url,
-    downloads: r.downloads
-  }));
-
-  return { chunks };
+  return { chunks: data || [] };
 };
