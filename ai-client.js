@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const config = require("./config");
 const { google: cfg } = require("./config");
 
 async function getEmb(text) {
@@ -23,8 +24,8 @@ async function getEmb(text) {
   return data.embedding.values;
 }
 
-async function getAnswer(model, history, prompt) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cfg.key}`, {
+async function getAnswerGoogle(history, prompt) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.google.chatModel}:generateContent?key=${cfg.key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -43,7 +44,50 @@ async function getAnswer(model, history, prompt) {
     throw new Error("Empty or invalid response from AI.");
   }
 
-  return data;
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function getAnswerAnthropic(history, prompt) {
+  const messages = [];
+
+  history.forEach(h => {
+    messages.push({ role: h.role === 'user' ? 'user' : 'assistant', content: h.content });
+  });
+  messages.push({ role: "user", content: prompt });
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.anthropic.key,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: config.anthropic.chatModel,
+      messages: messages,
+      max_tokens: 4096,
+      temperature: 0.0
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Anthropic Generate Error: ${data.error?.message || res.statusText}`);
+
+  if (!data.content?.[0]?.text) {
+    throw new Error("Empty or invalid response from AI.");
+  }
+
+  return data.content[0].text;
+}
+
+async function getAnswer(history, prompt) {
+  if (config.provider === "google") {
+    return await getAnswerGoogle(history, prompt);
+  } else if (config.provider === "anthropic") {
+    return await getAnswerAnthropic(history, prompt);
+  } else {
+    throw new Error(`Unknown provider: ${config.provider}`);
+  }
 }
 
 module.exports = { getEmb, getAnswer };
