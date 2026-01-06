@@ -1,6 +1,5 @@
 const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext } = require('./database');
-const { google: cfg } = require('./config');
 const { buildExtractionPrompt } = require('./prompts');
 
 exports.search = async (payload) => {
@@ -8,8 +7,7 @@ exports.search = async (payload) => {
     const { query } = payload;
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    const extractResponse = await getAnswer(cfg.chatModel, [], buildExtractionPrompt(query, data));
-    const extractContent = extractResponse.candidates[0].content.parts[0].text;
+    const extractContent = await getAnswer([], buildExtractionPrompt(query, data));
 
     let result;
     const jsonMatch = extractContent.match(/\{[\s\S]*\}/);
