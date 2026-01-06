@@ -1,12 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
+const config = require('./config');
 
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  config.supabase.url,
+  config.supabase.key
 );
 
 exports.getFullContext = async (embedding, query) => {
-  // Updated RPC name to match the 'chunks' table context
   const { data, error } = await supabase.rpc('match_chunks', {
     query_embedding: embedding,
     match_threshold: 0.45,
