@@ -50,27 +50,32 @@ function cleanTextForTTS(text) {
     text = text.replace(/(\*|_)(.*?)\1/g, '$2');
 
     // 4. Remove Headers completely (# Header)
-    // Removes the entire line containing the header
     text = text.replace(/^#+ .*$/gm, '');
 
     // 5. Remove Parentheses and their content completely
     // "word (explanation)" -> "word"
     text = text.replace(/\s*\([^)]*\)/g, '');
 
-    // 6. Remove Bullet points (•, -, *) at start of lines
+    // 6. Remove Czech Legal Entities (s.r.o., z.ú., etc.)
+    // Matches patterns like ", s.r.o.", " s. r. o.", ", z.ú."
+    // We remove them to make the company names sound natural.
+    const legalEntitiesRegex = /(?:,\s*|\s+)(?:s\. ?r\. ?o\.|z\. ?[sú]\.|a\. ?s\.|o\. ?p\. ?s\.|v\. ?o\. ?s\.|k\. ?s\.)/gi;
+    text = text.replace(legalEntitiesRegex, '');
+
+    // 7. Remove Bullet points (•, -, *) at start of lines
     text = text.replace(/^[•*-]\s+/gm, '');
 
-    // 7. Remove Emojis (Unicode ranges)
+    // 8. Remove Emojis (Unicode ranges)
     text = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
 
-    // 8. Remove remaining raw URLs (e.g. http://...)
+    // 9. Remove remaining raw URLs (e.g. http://...)
     text = text.replace(/https?:\/\/\S+/g, '');
 
-    // 9. Fix Pronunciation for "ligavozic"
+    // 10. Fix Pronunciation for "ligavozic"
     // Force hard 'z' by breaking the 'zi' digraph or using phonetic spelling
     text = text.replace(/ligavozic/gi, 'liga vozic');
 
-    // 10. Cleanup Punctuation and Whitespace
+    // 11. Cleanup Punctuation and Whitespace
     // Fix double spaces or spaces before punctuation
     text = text.replace(/\s+([,.])/g, '$1');
     // Collapse multiple newlines to avoid long pauses
