@@ -3,12 +3,8 @@ const config = require("./config");
 const { google: cfg } = require("./config");
 const crypto = require('crypto');
 
-// Helper to safely get key and remove whitespace/newlines
-const getKey = (k) => k ? k.trim() : "";
-
 async function getEmb(text) {
-  const key = getKey(cfg.key);
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${key}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -30,8 +26,7 @@ async function getEmb(text) {
 }
 
 async function getAnswerGoogle(history, prompt) {
-  const key = getKey(cfg.key);
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.google.chatModel}:generateContent?key=${key}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.google.chatModel}:generateContent?key=${cfg.key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -65,7 +60,7 @@ async function getAnswerAnthropic(history, prompt) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': getKey(config.anthropic.key),
+      'x-api-key': config.anthropic.key,
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
@@ -145,12 +140,12 @@ async function getTTS(text) {
   if (!config.google.ttsKey) {
     throw new Error("TTS Configuration Error: No API Key or Service Account provided.");
   }
-  const apiKeyOrJson = getKey(config.google.ttsKey);
+  const apiKeyOrJson = config.google.ttsKey;
   let url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
   let headers = { 'Content-Type': 'application/json' };
 
   // Check if it's a JSON Service Account Key (starts with {)
-  if (apiKeyOrJson && apiKeyOrJson.startsWith('{')) {
+  if (apiKeyOrJson && apiKeyOrJson.trim().startsWith('{')) {
     try {
       const token = await getGoogleAccessToken(apiKeyOrJson);
       headers['Authorization'] = `Bearer ${token}`;
@@ -170,7 +165,11 @@ async function getTTS(text) {
     body: JSON.stringify({
       input: { text: text },
       voice: { languageCode: 'cs-CZ', ssmlGender: 'FEMALE' },
-      audioConfig: { audioEncoding: 'MP3' }
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: 0.9, // Slightly slower (default 1.0)
+        pitch: 2.0         // Slightly higher inflection (default 0.0)
+      }
     })
   });
 
