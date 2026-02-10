@@ -8,6 +8,7 @@ module.exports = {
   },
   google: {
     key: process.env.GOOGLE_API_KEY,
+    ttsKey: process.env['Gemini-TTS-Key_json'] || process.env.GOOGLE_API_KEY,
     embModel: "gemini-embedding-001",
     chatModel: "gemini-2.5-flash"
   },

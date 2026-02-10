@@ -8,6 +8,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { search } = require('./search');
+const { getTTS } = require('./ai-client');
 
 const app = express();
 app.use(cors());
@@ -27,6 +28,28 @@ app.post('/search', async (req, res) => {
     } catch (error) {
         console.error("Route Error:", error);
         res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// Handles TTS requests
+app.post('/tts', async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text) return res.status(400).json({ error: 'No text provided' });
+
+        // Limit text length to prevent huge costs/latency
+        const safeText = text.substring(0, 5000);
+
+        const audioBuffer = await getTTS(safeText);
+
+        res.set({
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': audioBuffer.length
+        });
+        res.send(audioBuffer);
+    } catch (error) {
+        console.error("TTS Route Error:", error);
+        res.status(500).json({ error: 'TTS generation failed' });
     }
 });
 

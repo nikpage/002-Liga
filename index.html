@@ -241,19 +241,71 @@
             return md.trim();
         }
 
+        async function playTTS(text, btn) {
+            if (btn.disabled) return;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Načítám...';
+            btn.disabled = true;
+
+            try {
+                // Strip markdown for cleaner speech
+                const cleanText = text.replace(/[#*`]/g, '');
+
+                const res = await fetch('/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: cleanText })
+                });
+
+                if (!res.ok) throw new Error('TTS Failed');
+
+                const blob = await res.blob();
+                const audio = new Audio(URL.createObjectURL(blob));
+
+                btn.innerHTML = '🔊 Hraje...';
+                audio.play();
+
+                audio.onended = () => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                };
+
+                audio.onerror = () => {
+                    throw new Error("Playback error");
+                };
+
+            } catch (e) {
+                console.error(e);
+                btn.innerHTML = '❌ Chyba';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            }
+        }
+
         function addToolbar(msgElement, content) {
             const toolbar = document.createElement('div');
             toolbar.className = 'msg-toolbar';
+
             const dlReplyBtn = document.createElement('button');
             dlReplyBtn.className = 'tool-btn';
             dlReplyBtn.innerHTML = '💾 Odpověď';
             dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
+
             const dlChatBtn = document.createElement('button');
             dlChatBtn.className = 'tool-btn';
             dlChatBtn.innerHTML = '📂 Celý chat';
             dlChatBtn.onclick = () => downloadHistory();
+
+            const ttsBtn = document.createElement('button');
+            ttsBtn.className = 'tool-btn';
+            ttsBtn.innerHTML = '🔊 Přehrát';
+            ttsBtn.onclick = () => playTTS(content, ttsBtn);
+
             toolbar.appendChild(dlReplyBtn);
             toolbar.appendChild(dlChatBtn);
+            toolbar.appendChild(ttsBtn);
             msgElement.appendChild(toolbar);
         }
 

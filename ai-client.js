@@ -90,4 +90,27 @@ async function getAnswer(history, prompt) {
   }
 }
 
-module.exports = { getEmb, getAnswer };
+async function getTTS(text) {
+  const apiKey = config.google.ttsKey;
+  // Using standard Google Cloud TTS endpoint
+  const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: { text: text },
+      voice: { languageCode: 'cs-CZ', ssmlGender: 'FEMALE' },
+      audioConfig: { audioEncoding: 'MP3' }
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`TTS Error: ${data.error?.message || res.statusText}`);
+
+  if (!data.audioContent) throw new Error("No audio content returned from TTS API");
+
+  return Buffer.from(data.audioContent, 'base64');
+}
+
+module.exports = { getEmb, getAnswer, getTTS };
