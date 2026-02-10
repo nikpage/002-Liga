@@ -37,6 +37,31 @@
         .bot-msg p { margin-bottom: 1.25rem; line-height: 1.6; }
         .bot-msg a { text-decoration: underline; text-decoration-skip-ink: auto; }
 
+        /* Restored Toolbar Styles */
+        .msg-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+        }
+
+        .tool-btn {
+            background-color: #ffffff;
+            border: 1px solid #adb5bd;
+            color: #495057;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+        .tool-btn:hover { background-color: #f0f0f0; }
+
         .suggestions-container {
             display: flex;
             flex-wrap: wrap;
@@ -187,10 +212,30 @@
                     content = normalizeAnswer(content);
                 }
                 newMsg.innerHTML = marked.parse(content);
+
+                if (msg.role === 'assistant') {
+                    addToolbar(newMsg, content);
+                }
                 msgs.appendChild(newMsg);
             });
             // Scroll to bottom
             if (msgs.lastChild) msgs.lastChild.scrollIntoView();
+        }
+
+        function downloadFile(filename, text) {
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+
+        function downloadHistory() {
+            if (chatHistory.length === 0) return;
+            const text = chatHistory.map(msg => `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`).join('\n\n');
+            downloadFile('chat_historie.txt', text);
         }
 
         function normalizeAnswer(md, sources) {
@@ -218,7 +263,13 @@
             if (botMsgs.length === 0) return;
 
             const lastMsg = botMsgs[botMsgs.length - 1];
-            const text = lastMsg.innerText; // Get visible text content
+            // We need to get text content but exclude the toolbar text
+            // Clone the node to manipulate it without affecting display
+            const clone = lastMsg.cloneNode(true);
+            const toolbar = clone.querySelector('.msg-toolbar');
+            if (toolbar) toolbar.remove();
+
+            const text = clone.innerText;
 
             const originalText = btn.innerHTML;
             btn.innerHTML = '⏳';
@@ -261,6 +312,25 @@
             }
         }
 
+        function addToolbar(msgElement, content) {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'msg-toolbar';
+
+            const dlReplyBtn = document.createElement('button');
+            dlReplyBtn.className = 'tool-btn';
+            dlReplyBtn.innerHTML = '💾 Odpověď';
+            dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
+
+            const dlChatBtn = document.createElement('button');
+            dlChatBtn.className = 'tool-btn';
+            dlChatBtn.innerHTML = '📂 Celý chat';
+            dlChatBtn.onclick = () => downloadHistory();
+
+            toolbar.appendChild(dlReplyBtn);
+            toolbar.appendChild(dlChatBtn);
+            msgElement.appendChild(toolbar);
+        }
+
         function addMessage(role, content, sources) {
             const msgs = document.getElementById('messages');
             const newMsg = document.createElement('div');
@@ -271,6 +341,11 @@
             }
 
             newMsg.innerHTML = marked.parse(content);
+
+            if (role === 'assistant') {
+                addToolbar(newMsg, content);
+            }
+
             msgs.appendChild(newMsg);
             if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
             return newMsg;
