@@ -22,7 +22,7 @@
 
         .message { margin-bottom: 20px; padding: 15px; border-radius: 15px; max-width: 85%; line-height: 1.6; position: relative; }
         .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 4.5rem !important; }
+        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; }
 
         .bot-msg h1 {
             font-size: 1.25rem;
@@ -36,35 +36,6 @@
         .bot-msg li { margin-bottom: 0.75rem; }
         .bot-msg p { margin-bottom: 1.25rem; line-height: 1.6; }
         .bot-msg a { text-decoration: underline; text-decoration-skip-ink: auto; }
-
-        .msg-toolbar {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #ccc;
-            position: absolute;
-            bottom: 10px;
-            left: 15px;
-            right: 15px;
-        }
-
-        .tool-btn {
-            background-color: #ffffff;
-            border: 1px solid #adb5bd;
-            color: #495057;
-            cursor: pointer;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
 
         .suggestions-container {
             display: flex;
@@ -119,6 +90,22 @@
 
         #sendBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
 
+        #ttsBtn {
+            padding: 12px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #17a2b8;
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #ttsBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
+
         #newChatBtn {
             position: absolute;
             top: 20px;
@@ -153,6 +140,7 @@
 
         <div class="controls-area">
             <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
+            <button id="ttsBtn" onclick="playLastMessage()" title="Přečíst poslední odpověď">🔊</button>
             <button id="sendBtn" onclick="ask()">Odeslat</button>
         </div>
 
@@ -199,30 +187,10 @@
                     content = normalizeAnswer(content);
                 }
                 newMsg.innerHTML = marked.parse(content);
-
-                if (msg.role === 'assistant') {
-                    addToolbar(newMsg, content);
-                }
                 msgs.appendChild(newMsg);
             });
             // Scroll to bottom
             if (msgs.lastChild) msgs.lastChild.scrollIntoView();
-        }
-
-        function downloadFile(filename, text) {
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-            element.setAttribute('download', filename);
-            element.style.display = 'none';
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
-        }
-
-        function downloadHistory() {
-            if (chatHistory.length === 0) return;
-            const text = chatHistory.map(msg => `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`).join('\n\n');
-            downloadFile('chat_historie.txt', text);
         }
 
         function normalizeAnswer(md, sources) {
@@ -241,14 +209,23 @@
             return md.trim();
         }
 
-        async function playTTS(text, btn) {
+        async function playLastMessage() {
+            const btn = document.getElementById('ttsBtn');
             if (btn.disabled) return;
+
+            // Find the last bot message
+            const botMsgs = document.querySelectorAll('.bot-msg');
+            if (botMsgs.length === 0) return;
+
+            const lastMsg = botMsgs[botMsgs.length - 1];
+            const text = lastMsg.innerText; // Get visible text content
+
             const originalText = btn.innerHTML;
-            btn.innerHTML = '⏳ Načítám...';
+            btn.innerHTML = '⏳';
             btn.disabled = true;
 
             try {
-                // Strip markdown for cleaner speech
+                // Strip markdown/special chars for cleaner speech
                 const cleanText = text.replace(/[#*`]/g, '');
 
                 const res = await fetch('/tts', {
@@ -262,7 +239,7 @@
                 const blob = await res.blob();
                 const audio = new Audio(URL.createObjectURL(blob));
 
-                btn.innerHTML = '🔊 Hraje...';
+                btn.innerHTML = '🔊'; // Active icon
                 audio.play();
 
                 audio.onended = () => {
@@ -276,37 +253,12 @@
 
             } catch (e) {
                 console.error(e);
-                btn.innerHTML = '❌ Chyba';
+                btn.innerHTML = '❌';
                 setTimeout(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 }, 2000);
             }
-        }
-
-        function addToolbar(msgElement, content) {
-            const toolbar = document.createElement('div');
-            toolbar.className = 'msg-toolbar';
-
-            const dlReplyBtn = document.createElement('button');
-            dlReplyBtn.className = 'tool-btn';
-            dlReplyBtn.innerHTML = '💾 Odpověď';
-            dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
-
-            const dlChatBtn = document.createElement('button');
-            dlChatBtn.className = 'tool-btn';
-            dlChatBtn.innerHTML = '📂 Celý chat';
-            dlChatBtn.onclick = () => downloadHistory();
-
-            const ttsBtn = document.createElement('button');
-            ttsBtn.className = 'tool-btn';
-            ttsBtn.innerHTML = '🔊 Přehrát';
-            ttsBtn.onclick = () => playTTS(content, ttsBtn);
-
-            toolbar.appendChild(dlReplyBtn);
-            toolbar.appendChild(dlChatBtn);
-            toolbar.appendChild(ttsBtn);
-            msgElement.appendChild(toolbar);
         }
 
         function addMessage(role, content, sources) {
@@ -319,11 +271,6 @@
             }
 
             newMsg.innerHTML = marked.parse(content);
-
-            if (role === 'assistant') {
-                addToolbar(newMsg, content);
-            }
-
             msgs.appendChild(newMsg);
             if (role === 'user') newMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
             return newMsg;
