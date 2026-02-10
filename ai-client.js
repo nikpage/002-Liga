@@ -137,6 +137,9 @@ async function getGoogleAccessToken(serviceAccountJson) {
 }
 
 async function getTTS(text) {
+  if (!config.google.ttsKey) {
+    throw new Error("TTS Configuration Error: No API Key or Service Account provided.");
+  }
   const apiKeyOrJson = config.google.ttsKey;
   let url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
   let headers = { 'Content-Type': 'application/json' };

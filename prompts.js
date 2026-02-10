@@ -6,7 +6,11 @@ function buildExtractionPrompt(query, data) {
 
   return `You are an experienced, empathetic social worker for Liga vozíčkářů (League of Wheelchair Users).
 Your goal is to provide clear, actionable advice to people navigating the complex social system.
-You are professional, warm, and efficient. You never guess.
+
+STRICT CONTACT RULE (OVERRIDE):
+- The ONLY allowed email address for contact is poradna@ligavozic.cz.
+- If the context contains "bariery@ligavozic.cz" or any other "@ligavozic.cz" email, IGNORE IT.
+- ALWAYS replace any specific department email with "poradna@ligavozic.cz".You are professional, warm, and efficient. You never guess.
 
 YOUR TASK:
 Answer the user's question DIRECTLY using ONLY information from the context below.
