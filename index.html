@@ -258,31 +258,23 @@
             const btn = document.getElementById('ttsBtn');
             if (btn.disabled) return;
 
-            // Find the last bot message
-            const botMsgs = document.querySelectorAll('.bot-msg');
-            if (botMsgs.length === 0) return;
+            // Find the last assistant message in history
+            // We use chatHistory instead of DOM to get the raw markdown
+            // This allows the server to correctly identify and strip the "Sources" section
+            const assistantMsgs = chatHistory.filter(m => m.role === 'assistant');
+            if (assistantMsgs.length === 0) return;
 
-            const lastMsg = botMsgs[botMsgs.length - 1];
-            // We need to get text content but exclude the toolbar text
-            // Clone the node to manipulate it without affecting display
-            const clone = lastMsg.cloneNode(true);
-            const toolbar = clone.querySelector('.msg-toolbar');
-            if (toolbar) toolbar.remove();
-
-            const text = clone.innerText;
+            const lastMsgContent = assistantMsgs[assistantMsgs.length - 1].content;
 
             const originalText = btn.innerHTML;
             btn.innerHTML = '⏳';
             btn.disabled = true;
 
             try {
-                // Strip markdown/special chars for cleaner speech
-                const cleanText = text.replace(/[#*`]/g, '');
-
                 const res = await fetch('/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: cleanText })
+                    body: JSON.stringify({ text: lastMsgContent })
                 });
 
                 if (!res.ok) throw new Error('TTS Failed');
