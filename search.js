@@ -8,7 +8,7 @@ exports.search = async (payload) => {
     const { query } = payload;
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query);
-    
+
     const extractContent = await getAnswer([], buildExtractionPrompt(query, data));
 
     let result;
@@ -30,7 +30,11 @@ exports.search = async (payload) => {
     citedChunks.forEach(chunk => {
       if (chunk.downloads && Array.isArray(chunk.downloads)) {
         chunk.downloads.forEach(item => {
-          if (item.source_url && !seenDownloads.has(item.source_url) && usedDownloadUrls.includes(item.source_url)) {
+          // FILTER: Only allow PDF downloads (Point 2)
+          if (item.source_url &&
+              item.source_url.toLowerCase().endsWith('.pdf') &&
+              !seenDownloads.has(item.source_url) &&
+              usedDownloadUrls.includes(item.source_url)) {
             seenDownloads.add(item.source_url);
             downloads.push({ title: item.file_name.replace(/\.[^/.]+$/, ""), url: item.source_url });
           }
