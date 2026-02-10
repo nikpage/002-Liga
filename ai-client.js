@@ -92,7 +92,13 @@ async function getAnswer(history, prompt) {
 }
 
 async function getGoogleAccessToken(serviceAccountJson) {
-  const serviceAccount = JSON.parse(serviceAccountJson);
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountJson);
+  } catch (e) {
+    throw new Error("Failed to parse Service Account JSON");
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const claim = {
     iss: serviceAccount.client_email,
@@ -103,12 +109,20 @@ async function getGoogleAccessToken(serviceAccountJson) {
   };
 
   const header = { alg: "RS256", typ: "JWT" };
-  const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const encodedClaim = Buffer.from(JSON.stringify(claim)).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  // Base64Url encoding helper
+  const toBase64Url = (str) => Buffer.from(str).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const encodedHeader = toBase64Url(JSON.stringify(header));
+  const encodedClaim = toBase64Url(JSON.stringify(claim));
 
   const sign = crypto.createSign('RSA-SHA256');
   sign.update(`${encodedHeader}.${encodedClaim}`);
-  const signature = sign.sign(serviceAccount.private_key, 'base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  // Ensure private key newlines are handled correctly
+  const privateKey = serviceAccount.private_key.replace(/\\n/g, '\n');
+  const signature = sign.sign(privateKey, 'base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
   const jwt = `${encodedHeader}.${encodedClaim}.${signature}`;
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -127,17 +141,18 @@ async function getTTS(text) {
   let url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
   let headers = { 'Content-Type': 'application/json' };
 
-  // Check if it's a JSON Service Account Key
+  // Check if it's a JSON Service Account Key (starts with {)
   if (apiKeyOrJson && apiKeyOrJson.trim().startsWith('{')) {
     try {
       const token = await getGoogleAccessToken(apiKeyOrJson);
       headers['Authorization'] = `Bearer ${token}`;
+      // When using OAuth, we do NOT pass ?key=
     } catch (e) {
       console.error("Failed to generate token from JSON key:", e);
       throw new Error("TTS Auth Failed: Invalid Service Account Key");
     }
   } else {
-    // Assume it's a standard API Key string
+    // Fallback to standard API Key string
     url += `?key=${apiKeyOrJson}`;
   }
 
