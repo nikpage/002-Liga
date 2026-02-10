@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const config = require("./config");
 const { google: cfg } = require("./config");
+const crypto = require('crypto');
 
 async function getEmb(text) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
@@ -90,14 +91,59 @@ async function getAnswer(history, prompt) {
   }
 }
 
+async function getGoogleAccessToken(serviceAccountJson) {
+  const serviceAccount = JSON.parse(serviceAccountJson);
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  };
+
+  const header = { alg: "RS256", typ: "JWT" };
+  const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const encodedClaim = Buffer.from(JSON.stringify(claim)).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(`${encodedHeader}.${encodedClaim}`);
+  const signature = sign.sign(serviceAccount.private_key, 'base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const jwt = `${encodedHeader}.${encodedClaim}.${signature}`;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Token Error: ${data.error_description || data.error}`);
+  return data.access_token;
+}
+
 async function getTTS(text) {
-  const apiKey = config.google.ttsKey;
-  // Using standard Google Cloud TTS endpoint
-  const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+  const apiKeyOrJson = config.google.ttsKey;
+  let url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
+  let headers = { 'Content-Type': 'application/json' };
+
+  // Check if it's a JSON Service Account Key
+  if (apiKeyOrJson && apiKeyOrJson.trim().startsWith('{')) {
+    try {
+      const token = await getGoogleAccessToken(apiKeyOrJson);
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch (e) {
+      console.error("Failed to generate token from JSON key:", e);
+      throw new Error("TTS Auth Failed: Invalid Service Account Key");
+    }
+  } else {
+    // Assume it's a standard API Key string
+    url += `?key=${apiKeyOrJson}`;
+  }
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify({
       input: { text: text },
       voice: { languageCode: 'cs-CZ', ssmlGender: 'FEMALE' },
