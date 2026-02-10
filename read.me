@@ -1,0 +1,43 @@
+# 002-liga-qa
+
+A RAG-based Q&A application for **Liga vozíčkářů**, designed to answer social work questions using specific context documents. It features text-to-speech capabilities optimized for Czech pronunciation.
+
+## Infrastructure & Services
+
+### Hosting
+- **Platform:** Railway
+- **Account:** ainikpage@gmail.com
+- **Deployment:** Automatic via Git/GitHub integration.
+
+### Database
+- **Provider:** Supabase
+- **Type:** PostgreSQL
+- **Extension:** `pgvector` (for vector similarity search)
+- **Table:** `chunks` (stores text segments and embeddings)
+- **RPC Function:** `match_chunks` (performs the similarity search)
+
+### AI Services
+1.  **Google Gemini (Primary)**
+    -   **Embeddings:** `gemini-embedding-001`
+    -   **Chat Model:** `gemini-2.5-flash`
+    -   **Text-to-Speech:** Google Cloud TTS (`cs-CZ-Wavenet-A` or similar standard voice)
+2.  **Anthropic (Alternative)**
+    -   **Chat Model:** `claude-haiku-4-5` (Configurable in `config.js`)
+
+## Environment Variables (Keys)
+
+These keys must be set in the Railway project settings or a local `.env` file.
+
+| Variable Name | Description |
+| :--- | :--- |
+| `SUPABASE_URL` | The REST URL for the Supabase instance. |
+| `SUPABASE_SERVICE_ROLE_KEY` | The secret service role key (bypasses RLS) for database access. |
+| `GOOGLE_API_KEY` | API Key for Google AI Studio (Gemini Chat & Embeddings). |
+| `GEMINI_TTS_KEY_JSON` | **(Optional)** Full Google Service Account JSON for TTS. If not provided, falls back to `GOOGLE_API_KEY`. |
+| `ANTHROPIC_API_KEY` | API Key for Anthropic (if switching provider to "anthropic"). |
+| `PORT` | Server port (default: 3000). |
+
+## Configuration Notes
+
+-   **Provider Switching:** The AI provider is set in `config.js` via the `provider` key (`"google"` or `"anthropic"`).
+-   **TTS Cleaning:** The `server.js` file contains specific Regex rules to clean Czech text (removing `s.r.o.`, `z.ú.`, headers, and parentheses) to ensure natural-sounding audio.
