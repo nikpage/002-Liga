@@ -14,6 +14,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
+// Serve widget files with permissive CORS and caching
+app.use('/widget', express.static(path.join(__dirname, 'widget'), {
+    setHeaders(res) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+}));
+
 // Serves the index.html file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
