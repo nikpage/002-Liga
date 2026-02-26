@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liga Widget – Demo</title>
+    <style>
+        /* Simulates a client's existing website */
+        body {
+            font-family: Georgia, serif;
+            margin: 0; padding: 0;
+            background: #fafafa; color: #333;
+        }
+        header {
+            background: #2c3e50; color: #fff;
+            padding: 30px 40px;
+        }
+        header h1 { margin: 0; font-size: 1.8rem; }
+        header p { margin: 4px 0 0; opacity: 0.7; font-size: 0.95rem; }
+        main { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        h2 { color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
+        p { line-height: 1.7; margin-bottom: 1rem; }
+        .card {
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+            padding: 20px; margin-bottom: 20px;
+        }
+        pre {
+            background: #263238; color: #eeffff; padding: 16px; border-radius: 6px;
+            overflow-x: auto; font-size: 13px; line-height: 1.5;
+        }
+        code { font-family: "Fira Code", "Consolas", monospace; }
+        footer {
+            text-align: center; padding: 20px; color: #999; font-size: 0.85rem;
+            border-top: 1px solid #e0e0e0; margin-top: 60px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Ukázkový web klienta</h1>
+    <p>Tato stránka simuluje web, do kterého je vložen Liga Widget</p>
+</header>
+
+<main>
+    <h2>Jak vložit widget na svůj web</h2>
+    <p>Stačí přidat jeden řádek <code>&lt;script&gt;</code> před uzavírací tag <code>&lt;/body&gt;</code>:</p>
+
+    <div class="card">
+        <h3>Základní vložení</h3>
+        <pre><code>&lt;script
+  src="https://ligavozic.up.railway.app/widget/liga-widget.js"
+  data-server="https://ligavozic.up.railway.app"&gt;
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="card">
+        <h3>S vlastním nastavením</h3>
+        <pre><code>&lt;script
+  src="https://ligavozic.up.railway.app/widget/liga-widget.js"
+  data-server="https://ligavozic.up.railway.app"
+  data-title="Poradna Liga Vozíčářů"
+  data-primary-color="#0066cc"
+  data-position="right"
+  data-open="false"&gt;
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="card">
+        <h3>Programatické ovládání</h3>
+        <pre><code>// Otevřít/zavřít widget
+LigaWidget.toggle();</code></pre>
+    </div>
+
+    <h2>Dostupné parametry</h2>
+    <div class="card">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="text-align:left; border-bottom:2px solid #e0e0e0;">
+                    <th style="padding:8px;">Parametr</th>
+                    <th style="padding:8px;">Výchozí</th>
+                    <th style="padding:8px;">Popis</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px;"><code>data-server</code></td>
+                    <td style="padding:8px;"><code>""</code></td>
+                    <td style="padding:8px;">URL serveru (povinné)</td>
+                </tr>
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px;"><code>data-title</code></td>
+                    <td style="padding:8px;">Otázky a Odpovědi</td>
+                    <td style="padding:8px;">Nadpis v hlavičce widgetu</td>
+                </tr>
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px;"><code>data-primary-color</code></td>
+                    <td style="padding:8px;"><code>#007bff</code></td>
+                    <td style="padding:8px;">Hlavní barva (header, tlačítko, odkazy)</td>
+                </tr>
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px;"><code>data-position</code></td>
+                    <td style="padding:8px;"><code>right</code></td>
+                    <td style="padding:8px;"><code>right</code> nebo <code>left</code></td>
+                </tr>
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px;"><code>data-open</code></td>
+                    <td style="padding:8px;"><code>false</code></td>
+                    <td style="padding:8px;">Otevřít chat automaticky při načtení</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px;"><code>data-z-index</code></td>
+                    <td style="padding:8px;"><code>9999</code></td>
+                    <td style="padding:8px;">CSS z-index pro widget</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>Ukázkový obsah stránky</h2>
+    <p>
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+        tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+        veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+        commodo consequat.
+    </p>
+    <p>
+        Duis aute irure dolor in reprehenderit in voluptate velit esse cillum
+        dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non
+        proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+    </p>
+</main>
+
+<footer>
+    &copy; 2025 Ukázkový web &mdash; Widget demo stránka
+</footer>
+
+<!-- Liga Widget – This single script tag is all a client needs -->
+<script
+    src="https://ligavozic.up.railway.app/widget/liga-widget.js"
+    data-server="https://ligavozic.up.railway.app"
+    data-title="Poradna Liga Vozíčářů 🧠"
+    data-position="right">
+</script>
+
+</body>
+</html>
