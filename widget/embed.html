@@ -80,13 +80,13 @@
         }
 
         input[type="text"] {
-            width: 100%; padding: 12px; border-radius: 5px;
+            flex: 1; min-width: 0; padding: 12px; border-radius: 5px;
             border: 1px solid #ccc; font-size: 16px; outline: none;
         }
         input[type="text"]:focus { border-color: #007bff; }
 
         #sendBtn {
-            width: 100%; padding: 12px 25px; border: none; border-radius: 5px;
+            padding: 12px 25px; border: none; border-radius: 5px;
             background-color: #28a745; color: white; cursor: pointer;
             font-size: 16px; font-weight: bold; transition: background-color 0.3s;
             white-space: nowrap;
@@ -136,8 +136,10 @@
         <div id="messages"></div>
         <div id="progress-indicator">Pracuji...</div>
         <div class="controls-area">
-            <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
-            <button id="sendBtn" onclick="ask()">Odeslat</button>
+            <div class="controls-row">
+                <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
+                <button id="sendBtn" onclick="ask()">Odeslat</button>
+            </div>
             <div class="controls-row">
                 <button id="newChatBtn" onclick="startNewChat()">Nový chat</button>
                 <button id="ttsBtn" onclick="playLastMessage()" title="Přečíst poslední odpověď">🔊 Přečíst</button>
