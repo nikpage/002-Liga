@@ -15,13 +15,14 @@
             min-height: 400px;
             display: flex;
             flex-direction: column;
+            position: relative;
         }
 
         #messages { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; max-height: 500px; display: flex; flex-direction: column; scroll-behavior: smooth; }
 
         .message { margin-bottom: 20px; padding: 15px; border-radius: 15px; max-width: 85%; line-height: 1.6; position: relative; }
         .user-msg { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; padding-bottom: 4.5rem !important; }
+        .bot-msg { background-color: #e4e6eb; color: black; align-self: flex-start; }
 
         .bot-msg h1 {
             font-size: 1.25rem;
@@ -36,17 +37,13 @@
         .bot-msg p { margin-bottom: 1.25rem; line-height: 1.6; }
         .bot-msg a { text-decoration: underline; text-decoration-skip-ink: auto; }
 
+        /* Restored Toolbar Styles */
         .msg-toolbar {
             display: flex;
             gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
+            margin-top: 10px;
             padding-top: 10px;
             border-top: 1px solid #ccc;
-            position: absolute;
-            bottom: 10px;
-            left: 15px;
-            right: 15px;
         }
 
         .tool-btn {
@@ -54,16 +51,16 @@
             border: 1px solid #adb5bd;
             color: #495057;
             cursor: pointer;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 11px;
             font-weight: bold;
             display: flex;
             align-items: center;
             gap: 5px;
             transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
+        .tool-btn:hover { background-color: #f0f0f0; }
 
         .suggestions-container {
             display: flex;
@@ -118,6 +115,35 @@
 
         #sendBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
 
+        #ttsBtn {
+            padding: 12px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #17a2b8;
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #ttsBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
+
+        #newChatBtn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
         #progress-indicator {
             margin-top: 10px;
             padding: 10px;
@@ -133,11 +159,13 @@
 </head>
 <body>
     <div id="chat-container">
+        <button id="newChatBtn" onclick="startNewChat()">Nový chat</button>
         <h2>Aplikace Otázky a Odpovědi 🧠</h2>
         <div id="messages"></div>
 
         <div class="controls-area">
             <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
+            <button id="ttsBtn" onclick="playLastMessage()" title="Přečíst poslední odpověď">🔊</button>
             <button id="sendBtn" onclick="ask()">Odeslat</button>
         </div>
 
@@ -149,6 +177,50 @@
 
         let chatHistory = [];
         const progressIndicator = document.getElementById('progress-indicator');
+
+        // Session Persistence Logic
+        window.onload = () => {
+            const navEntries = performance.getEntriesByType("navigation");
+            // If page was reloaded (F5), clear history. Otherwise (Back/Forward/Link), keep it.
+            if (navEntries.length > 0 && navEntries[0].type === "reload") {
+                sessionStorage.removeItem("chatHistory");
+                chatHistory = [];
+            } else {
+                const saved = sessionStorage.getItem("chatHistory");
+                if (saved) {
+                    chatHistory = JSON.parse(saved);
+                    restoreChat();
+                }
+            }
+        };
+
+        function startNewChat() {
+            sessionStorage.removeItem("chatHistory");
+            location.reload();
+        }
+
+        function restoreChat() {
+            const msgs = document.getElementById('messages');
+            msgs.innerHTML = '';
+            chatHistory.forEach(msg => {
+                // Re-render messages without triggering API calls
+                const newMsg = document.createElement('div');
+                newMsg.classList.add('message', msg.role === 'user' ? 'user-msg' : 'bot-msg');
+
+                let content = msg.content;
+                if (msg.role === 'assistant') {
+                    content = normalizeAnswer(content);
+                }
+                newMsg.innerHTML = marked.parse(content);
+
+                if (msg.role === 'assistant') {
+                    addToolbar(newMsg, content);
+                }
+                msgs.appendChild(newMsg);
+            });
+            // Scroll to bottom
+            if (msgs.lastChild) msgs.lastChild.scrollIntoView();
+        }
 
         function downloadFile(filename, text) {
             const element = document.createElement('a');
@@ -182,6 +254,75 @@
             return md.trim();
         }
 
+        async function playLastMessage() {
+            const btn = document.getElementById('ttsBtn');
+            if (btn.disabled) return;
+
+            // Find the last assistant message in history
+            // We use chatHistory instead of DOM to get the raw markdown
+            // This allows the server to correctly identify and strip the "Sources" section
+            const assistantMsgs = chatHistory.filter(m => m.role === 'assistant');
+            if (assistantMsgs.length === 0) return;
+
+            const lastMsgContent = assistantMsgs[assistantMsgs.length - 1].content;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: lastMsgContent })
+                });
+
+                if (!res.ok) throw new Error('TTS Failed');
+
+                const blob = await res.blob();
+                const audio = new Audio(URL.createObjectURL(blob));
+
+                btn.innerHTML = '🔊'; // Active icon
+                audio.play();
+
+                audio.onended = () => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                };
+
+                audio.onerror = () => {
+                    throw new Error("Playback error");
+                };
+
+            } catch (e) {
+                console.error(e);
+                btn.innerHTML = '❌';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            }
+        }
+
+        function addToolbar(msgElement, content) {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'msg-toolbar';
+
+            const dlReplyBtn = document.createElement('button');
+            dlReplyBtn.className = 'tool-btn';
+            dlReplyBtn.innerHTML = '💾 Odpověď';
+            dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
+
+            const dlChatBtn = document.createElement('button');
+            dlChatBtn.className = 'tool-btn';
+            dlChatBtn.innerHTML = '📂 Celý chat';
+            dlChatBtn.onclick = () => downloadHistory();
+
+            toolbar.appendChild(dlReplyBtn);
+            toolbar.appendChild(dlChatBtn);
+            msgElement.appendChild(toolbar);
+        }
+
         function addMessage(role, content, sources) {
             const msgs = document.getElementById('messages');
             const newMsg = document.createElement('div');
@@ -194,19 +335,7 @@
             newMsg.innerHTML = marked.parse(content);
 
             if (role === 'assistant') {
-                const toolbar = document.createElement('div');
-                toolbar.className = 'msg-toolbar';
-                const dlReplyBtn = document.createElement('button');
-                dlReplyBtn.className = 'tool-btn';
-                dlReplyBtn.innerHTML = '💾 Odpověď';
-                dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
-                const dlChatBtn = document.createElement('button');
-                dlChatBtn.className = 'tool-btn';
-                dlChatBtn.innerHTML = '📂 Celý chat';
-                dlChatBtn.onclick = () => downloadHistory();
-                toolbar.appendChild(dlReplyBtn);
-                toolbar.appendChild(dlChatBtn);
-                newMsg.appendChild(toolbar);
+                addToolbar(newMsg, content);
             }
 
             msgs.appendChild(newMsg);
@@ -240,6 +369,9 @@
             btn.disabled = true;
             chatHistory.push({ role: "user", content: query });
 
+            // Save to Session Storage
+            sessionStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+
             const oldSuggestions = document.querySelectorAll('.suggestions-container');
             oldSuggestions.forEach(el => el.style.display = 'none');
             progressIndicator.style.display = 'block';
@@ -258,7 +390,11 @@
                 progressIndicator.style.display = 'none';
                 const sources = data.metadata && data.metadata.sources ? data.metadata.sources : [];
                 const answerElement = addMessage('assistant', data.answer, sources);
+
                 chatHistory.push({ role: "assistant", content: data.answer });
+                // Save updated history
+                sessionStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+
                 if (data.suggestions) addSuggestions(data.suggestions);
                 setTimeout(() => { answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
             } catch (error) {

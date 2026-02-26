@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const config = require("./config");
 const { google: cfg } = require("./config");
+const crypto = require('crypto');
 
 async function getEmb(text) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
@@ -90,4 +91,94 @@ async function getAnswer(history, prompt) {
   }
 }
 
-module.exports = { getEmb, getAnswer };
+async function getGoogleAccessToken(serviceAccountJson) {
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountJson);
+  } catch (e) {
+    throw new Error("Failed to parse Service Account JSON");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  };
+
+  const header = { alg: "RS256", typ: "JWT" };
+
+  // Base64Url encoding helper
+  const toBase64Url = (str) => Buffer.from(str).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const encodedHeader = toBase64Url(JSON.stringify(header));
+  const encodedClaim = toBase64Url(JSON.stringify(claim));
+
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(`${encodedHeader}.${encodedClaim}`);
+
+  // Ensure private key newlines are handled correctly
+  const privateKey = serviceAccount.private_key.replace(/\\n/g, '\n');
+  const signature = sign.sign(privateKey, 'base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const jwt = `${encodedHeader}.${encodedClaim}.${signature}`;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Token Error: ${data.error_description || data.error}`);
+  return data.access_token;
+}
+
+async function getTTS(text) {
+  if (!config.google.ttsKey) {
+    throw new Error("TTS Configuration Error: No API Key or Service Account provided.");
+  }
+  const apiKeyOrJson = config.google.ttsKey;
+  let url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
+  let headers = { 'Content-Type': 'application/json' };
+
+  // Check if it's a JSON Service Account Key (starts with {)
+  if (apiKeyOrJson && apiKeyOrJson.trim().startsWith('{')) {
+    try {
+      const token = await getGoogleAccessToken(apiKeyOrJson);
+      headers['Authorization'] = `Bearer ${token}`;
+      // When using OAuth, we do NOT pass ?key=
+    } catch (e) {
+      console.error("Failed to generate token from JSON key:", e);
+      throw new Error("TTS Auth Failed: Invalid Service Account Key");
+    }
+  } else {
+    // Fallback to standard API Key string
+    url += `?key=${apiKeyOrJson}`;
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({
+      input: { text: text },
+      voice: { languageCode: 'cs-CZ', ssmlGender: 'FEMALE' },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: 0.9, // Slightly slower (default 1.0)
+        pitch: 2.0         // Slightly higher inflection (default 0.0)
+      }
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`TTS Error: ${data.error?.message || res.statusText}`);
+
+  if (!data.audioContent) throw new Error("No audio content returned from TTS API");
+
+  return Buffer.from(data.audioContent, 'base64');
+}
+
+module.exports = { getEmb, getAnswer, getTTS };
