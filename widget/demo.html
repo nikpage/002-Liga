@@ -136,11 +136,13 @@ LigaWidget.toggle();</code></pre>
 </footer>
 
 <!-- Liga Widget – This single script tag is all a client needs -->
-<script
-    src="https://ligavozic.up.railway.app/widget/liga-widget.js"
-    data-server="https://ligavozic.up.railway.app"
-    data-title="Poradna Liga Vozíčářů 🧠"
-    data-position="right">
+<script>
+    // Use the same origin as the demo page so it works on localhost AND production
+    var _srv = location.origin;
+    document.write('<script src="' + _srv + '/widget/liga-widget.js"'
+      + ' data-server="' + _srv + '"'
+      + ' data-title="Poradna Liga Vozíčářů"'
+      + ' data-position="right"><\/script>');
 </script>
 
 </body>
