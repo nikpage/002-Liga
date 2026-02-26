@@ -30,7 +30,7 @@
   }
 
   var CFG = {
-    server:       attr("server", ""),
+    server:       attr("server", location.origin),
     title:        attr("title", "Otázky a Odpovědi"),
     primaryColor: attr("primary-color", "#007bff"),
     position:     attr("position", "right"),
