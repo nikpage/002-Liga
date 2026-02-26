@@ -70,13 +70,17 @@
         .suggestion-btn:hover { background-color: #007bff; color: #fff; }
 
         .controls-area {
-            display: flex; gap: 10px; align-items: center;
+            display: flex; flex-direction: column; gap: 8px;
             padding: 12px 16px; border-top: 1px solid #e0e0e0;
             background: #fff; flex-shrink: 0;
         }
 
+        .controls-row {
+            display: flex; gap: 8px; align-items: center;
+        }
+
         input[type="text"] {
-            flex-grow: 1; padding: 12px; border-radius: 5px;
+            flex: 1; min-width: 0; padding: 12px; border-radius: 5px;
             border: 1px solid #ccc; font-size: 16px; outline: none;
         }
         input[type="text"]:focus { border-color: #007bff; }
@@ -91,33 +95,33 @@
         #sendBtn:hover:not(:disabled) { background-color: #218838; }
 
         #ttsBtn {
-            padding: 12px 15px;
+            flex: 1;
+            padding: 10px 15px;
             border: none;
             border-radius: 5px;
             background-color: #17a2b8;
             color: white;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
             transition: background-color 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 6px;
         }
         #ttsBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
 
         #newChatBtn {
-            position: absolute;
-            top: 12px;
-            right: 12px;
+            flex: 1;
             background-color: #dc3545;
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 10px 12px;
             border-radius: 5px;
             cursor: pointer;
             font-size: 13px;
-            z-index: 1;
+            font-weight: bold;
         }
 
         #progress-indicator {
@@ -129,13 +133,17 @@
 </head>
 <body>
     <div id="chat-container">
-        <button id="newChatBtn" onclick="startNewChat()">Nový chat</button>
         <div id="messages"></div>
         <div id="progress-indicator">Pracuji...</div>
         <div class="controls-area">
-            <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
-            <button id="ttsBtn" onclick="playLastMessage()" title="Přečíst poslední odpověď">🔊</button>
-            <button id="sendBtn" onclick="ask()">Odeslat</button>
+            <div class="controls-row">
+                <input type="text" id="query" placeholder="Zadejte dotaz..." onkeydown="if(event.key === 'Enter') ask()">
+                <button id="sendBtn" onclick="ask()">Odeslat</button>
+            </div>
+            <div class="controls-row">
+                <button id="newChatBtn" onclick="startNewChat()">Nový chat</button>
+                <button id="ttsBtn" onclick="playLastMessage()" title="Přečíst poslední odpověď">🔊 Přečíst</button>
+            </div>
         </div>
     </div>
 
@@ -348,7 +356,8 @@
                 setTimeout(() => { answerElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
             } catch (error) {
                 progressIndicator.style.display = 'none';
-                addMessage('assistant', 'CHYBA SYSTÉMU: Zkontrolujte připojení.');
+                console.error('Chat error:', error);
+                addMessage('assistant', 'Omlouváme se, nepodařilo se spojit se serverem. Zkuste to prosím znovu.');
             } finally {
                 btn.disabled = false;
             }

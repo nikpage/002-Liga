@@ -85,8 +85,8 @@
   position: fixed;\
   z-index: ' + (CFG.zIndex + 2) + ';\
   bottom: 92px; ' + pos + '\
-  width: 400px; max-width: calc(100vw - 24px);\
-  height: 560px; max-height: calc(100vh - 120px);\
+  width: 500px; max-width: calc(100vw - 24px);\
+  height: 650px; max-height: calc(100vh - 120px);\
   background: #fff;\
   border-radius: 16px;\
   box-shadow: 0 8px 40px rgba(0,0,0,0.25);\
