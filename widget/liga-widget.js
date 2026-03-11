@@ -36,12 +36,16 @@
     position:     attr("position", "right"),
     startOpen:    attr("open", "false") === "true",
     zIndex:       parseInt(attr("z-index", "9999"), 10),
+    icon:         attr("icon", ""),
   };
 
   var isOpen = false;
   var host, shadow, launcher, overlay, modal, iframe;
 
-  function chatIconSVG() {
+  function chatIconHTML() {
+    if (CFG.icon) {
+      return '<img src="' + CFG.icon + '" width="32" height="32" style="border-radius:50%;object-fit:cover;" alt="Chat">';
+    }
     return '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
   }
 
@@ -147,7 +151,7 @@
 
     overlay.classList.toggle("visible", isOpen);
     modal.classList.toggle("visible", isOpen);
-    launcher.innerHTML = isOpen ? closeIconSVG() : chatIconSVG();
+    launcher.innerHTML = isOpen ? closeIconSVG() : chatIconHTML();
 
     // Lazy-load iframe on first open
     if (isOpen && !iframe.src) {
@@ -170,7 +174,7 @@
     launcher = document.createElement("button");
     launcher.className = "liga-launcher";
     launcher.setAttribute("aria-label", "Otevřít chat");
-    launcher.innerHTML = chatIconSVG();
+    launcher.innerHTML = chatIconHTML();
     launcher.onclick = toggle;
     shadow.appendChild(launcher);
 
@@ -236,6 +240,7 @@
         if (opts.position) CFG.position = opts.position;
         if (opts.startOpen !== undefined) CFG.startOpen = opts.startOpen;
         if (opts.zIndex !== undefined) CFG.zIndex = opts.zIndex;
+        if (opts.icon) CFG.icon = opts.icon;
       }
       boot();
     },
