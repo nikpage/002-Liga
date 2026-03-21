@@ -9,6 +9,7 @@ const path = require('path');
 const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
+const { getQALogs } = require('./database');
 
 const app = express();
 app.use(cors());
@@ -91,6 +92,24 @@ function cleanTextForTTS(text) {
 
     return text.trim();
 }
+
+// Serves the admin page for Q&A logs
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Returns Q&A logs as JSON
+app.get('/api/qa-logs', async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 500, 5000);
+        const offset = parseInt(req.query.offset) || 0;
+        const result = await getQALogs(limit, offset);
+        res.json(result);
+    } catch (error) {
+        console.error("QA Logs Route Error:", error);
+        res.status(500).json({ error: 'Failed to fetch QA logs' });
+    }
+});
 
 // Handles TTS requests
 app.post('/tts', async (req, res) => {

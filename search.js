@@ -1,5 +1,5 @@
 const { getEmb, getAnswer } = require('./ai-client');
-const { getFullContext } = require('./database');
+const { getFullContext, logQA } = require('./database');
 const { buildExtractionPrompt } = require('./prompts');
 
 exports.search = async (payload) => {
@@ -63,6 +63,9 @@ exports.search = async (payload) => {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
       sources.forEach((s, i) => { answer += `${i + 1}. [${s.title}](${s.url})\n`; });
     }
+
+    // Fire-and-forget: log Q&A to database
+    logQA(query, answer);
 
     return { answer, downloads, metadata: { sources } };
   } catch (err) {

@@ -23,3 +23,24 @@ exports.getFullContext = async (embedding, query) => {
 
   return { chunks: data || [] };
 };
+
+exports.logQA = (question, answer) => {
+  supabase.from('qa_logs').insert({ question, answer }).then(({ error }) => {
+    if (error) console.error("QA LOG ERROR:", error);
+  });
+};
+
+exports.getQALogs = async (limit = 500, offset = 0) => {
+  const { data, error, count } = await supabase
+    .from('qa_logs')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    console.error("QA LOGS FETCH ERROR:", error);
+    throw error;
+  }
+
+  return { logs: data || [], total: count };
+};
