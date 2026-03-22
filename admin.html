@@ -156,7 +156,7 @@
                 '#': i + 1,
                 'Datum': new Date(log.created_at).toLocaleString('cs-CZ'),
                 'Otazka': log.question || '',
-                'Odpoved': stripMarkdown(log.answer || '')
+                'Odpoved': log.answer || ''
             }));
 
             const ws = XLSX.utils.json_to_sheet(rows);
