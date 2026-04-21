@@ -90,4 +90,21 @@ function logout() {
     cachedSessionId = null;
 }
 
-module.exports = { login, callMethod, logout };
+// Logs a Q&A pair as a Journal entry in eWay-CRM.
+// Fire-and-forget: resolves silently on success, logs errors to console.
+function logQA(question, answer) {
+    if (!cfg || !cfg.username) return; // CRM not configured, skip silently
+
+    const title = (question || '').substring(0, 250).trim() || 'Q&A';
+    const transmitObject = {
+        FileAs: title,
+        Subject: title,
+        Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`
+    };
+
+    callMethod('SaveJournal', { transmitObject }).catch(err => {
+        console.error('EWAY QA LOG ERROR:', err.message);
+    });
+}
+
+module.exports = { login, callMethod, logout, logQA };

@@ -1,5 +1,6 @@
 const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext, logQA } = require('./database');
+const { logQA: logQAEway } = require('./eway-crm');
 const { buildExtractionPrompt } = require('./prompts');
 
 exports.search = async (payload) => {
@@ -66,6 +67,8 @@ exports.search = async (payload) => {
 
     // Fire-and-forget: log Q&A to database
     logQA(query, answer);
+    // Fire-and-forget: log Q&A to eWay-CRM as a Journal entry
+    logQAEway(query, answer);
 
     return { answer, downloads, metadata: { sources } };
   } catch (err) {
