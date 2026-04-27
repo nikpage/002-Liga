@@ -63,8 +63,7 @@
 .liga-launcher {\
   position: fixed; bottom: 20px; ' + pos + '\
   z-index: ' + CFG.zIndex + ';\
-  width: 140px; height: 78px;\
-  border-radius: 50%;\
+  width: 180px; height: 100px;\
   background: transparent;\
   color: #fff;\
   border: none;\
@@ -73,7 +72,6 @@
   display: flex; align-items: center; justify-content: center;\
   transition: transform 0.2s;\
   line-height: 1;\
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));\
 }\
 .liga-launcher.liga-launcher--close {\
   width: 48px; height: 48px;\
@@ -147,7 +145,7 @@
     ' + (CFG.position === "left" ? "left:8px;" : "right:8px;") + '\
     border-radius: 12px;\
   }\
-  .liga-launcher { bottom: 12px; ' + (CFG.position === "left" ? "left:12px;" : "right:12px;") + ' width: 120px; height: 67px; }\
+  .liga-launcher { bottom: 12px; ' + (CFG.position === "left" ? "left:12px;" : "right:12px;") + ' width: 150px; height: 84px; }\
   .liga-launcher.liga-launcher--close { width: 44px; height: 44px; }\
 }\
 ';
