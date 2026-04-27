@@ -46,11 +46,11 @@
     if (CFG.icon) {
       return '<img src="' + CFG.icon + '" width="32" height="32" style="border-radius:50%;object-fit:cover;" alt="Chat">';
     }
-    return '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+    return '<img src="' + CFG.server + '/widget/assets/launcher.png" alt="Klikni na mě" style="width:100%;height:100%;object-fit:contain;display:block;">';
   }
 
   function closeIconSVG() {
-    return '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    return '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1d2a5e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
   }
 
   function getStyles() {
@@ -63,18 +63,26 @@
 .liga-launcher {\
   position: fixed; bottom: 20px; ' + pos + '\
   z-index: ' + CFG.zIndex + ';\
-  width: 60px; height: 60px;\
+  width: 140px; height: 78px;\
   border-radius: 50%;\
-  background: ' + pc + ';\
+  background: transparent;\
   color: #fff;\
   border: none;\
   cursor: pointer;\
-  box-shadow: 0 4px 16px rgba(0,0,0,0.25);\
+  padding: 0;\
   display: flex; align-items: center; justify-content: center;\
-  transition: transform 0.2s, box-shadow 0.2s;\
-  font-size: 28px; line-height: 1;\
+  transition: transform 0.2s;\
+  line-height: 1;\
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));\
 }\
-.liga-launcher:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(0,0,0,0.3); }\
+.liga-launcher.liga-launcher--close {\
+  width: 48px; height: 48px;\
+  background: #fff;\
+  border-radius: 50%;\
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);\
+  filter: none;\
+}\
+.liga-launcher:hover { transform: scale(1.06); }\
 \
 .liga-overlay {\
   position: fixed; inset: 0;\
@@ -103,17 +111,21 @@
 .liga-modal.visible { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }\
 \
 .liga-modal-header {\
-  display: flex; align-items: center; gap: 10px;\
-  padding: 14px 18px;\
-  background: ' + pc + '; color: #fff;\
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;\
-  font-weight: 700; font-size: 15px;\
+  position: relative;\
+  background-image: url("' + CFG.server + '/widget/assets/header.png");\
+  background-size: cover;\
+  background-position: left center;\
+  background-repeat: no-repeat;\
+  width: 100%;\
+  aspect-ratio: 1600 / 334;\
   flex-shrink: 0;\
 }\
-.liga-modal-header-title { flex: 1; }\
+.liga-modal-header-title { display: none; }\
 .liga-modal-close {\
+  position: absolute; top: 8px; right: 10px;\
   background: none; border: none; color: #fff; font-size: 22px; cursor: pointer;\
-  padding: 0; line-height: 1; opacity: 0.85; transition: opacity 0.15s;\
+  padding: 0 6px; line-height: 1; opacity: 0.9; transition: opacity 0.15s;\
+  font-weight: 700;\
 }\
 .liga-modal-close:hover { opacity: 1; }\
 \
@@ -135,7 +147,8 @@
     ' + (CFG.position === "left" ? "left:8px;" : "right:8px;") + '\
     border-radius: 12px;\
   }\
-  .liga-launcher { bottom: 12px; ' + (CFG.position === "left" ? "left:12px;" : "right:12px;") + ' width: 52px; height: 52px; font-size: 24px; }\
+  .liga-launcher { bottom: 12px; ' + (CFG.position === "left" ? "left:12px;" : "right:12px;") + ' width: 120px; height: 67px; }\
+  .liga-launcher.liga-launcher--close { width: 44px; height: 44px; }\
 }\
 ';
   }
@@ -151,6 +164,7 @@
 
     overlay.classList.toggle("visible", isOpen);
     modal.classList.toggle("visible", isOpen);
+    launcher.classList.toggle("liga-launcher--close", isOpen);
     launcher.innerHTML = isOpen ? closeIconSVG() : chatIconHTML();
 
     // Lazy-load iframe on first open
