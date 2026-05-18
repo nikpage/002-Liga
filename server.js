@@ -122,6 +122,40 @@ app.get('/api/eway/test', async (req, res) => {
     }
 });
 
+// One-shot: clears the forced password change by logging in with newPasswordHash.
+// Hit ONCE with ?new=<NEW_PASSWORD>, then update EWAY_PASSWORD in Railway to the new value.
+app.get('/api/eway/change-password', async (req, res) => {
+    try {
+        const newPass = req.query.new;
+        if (!newPass || newPass.length < 8) {
+            return res.status(400).json({ ok: false, error: 'Pass ?new=<password> (min 8 chars).' });
+        }
+        const crypto = require('crypto');
+        const fetch = require('node-fetch');
+        const cfg = require('./config').eway;
+        if (!cfg.username || !cfg.password) {
+            return res.status(500).json({ ok: false, error: 'EWAY_USERNAME or EWAY_PASSWORD not set.' });
+        }
+        const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex');
+        const r = await fetch(cfg.serviceUrl.replace(/\/+$/, '') + '/API.svc/LogIn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userName: cfg.username,
+                passwordHash: md5(cfg.password),
+                newPasswordHash: md5(newPass),
+                appVersion: 'AV_001',
+                clientMachineIdentifier: 'liga-qa-server',
+                clientMachineName: 'liga-qa-server'
+            })
+        });
+        const data = await r.json();
+        res.json({ httpStatus: r.status, response: data });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
