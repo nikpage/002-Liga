@@ -10,6 +10,7 @@ const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
 const { getQALogs } = require('./database');
+const { login: ewayLogin } = require('./eway-crm');
 
 const app = express();
 app.use(cors());
@@ -108,6 +109,16 @@ app.get('/api/qa-logs', async (req, res) => {
     } catch (error) {
         console.error("QA Logs Route Error:", error);
         res.status(500).json({ error: 'Failed to fetch QA logs' });
+    }
+});
+
+// Diagnostic: tests eWay-CRM login and reports the raw result.
+app.get('/api/eway/test', async (req, res) => {
+    try {
+        const sessionId = await ewayLogin();
+        res.json({ ok: true, sessionId });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
     }
 });
 
