@@ -15,5 +15,11 @@ module.exports = {
   anthropic: {
     key: process.env.ANTHROPIC_API_KEY,
     chatModel: "claude-haiku-4-5"
+  },
+  eway: {
+    serviceUrl: process.env.EWAY_SERVICE_URL || "https://hosting.eway-crm.com/liga_vozickaru/",
+    username: process.env.EWAY_USERNAME,
+    password: process.env.EWAY_PASSWORD,
+    passwordHash: process.env.EWAY_PASSWORD_HASH
   }
 };
