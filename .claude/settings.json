@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "/home/nik/.claude/projects",
+      "/home/nik/.claude"
+    ],
+    "allow": [
+      "Bash(node eway-verify.js *)",
+      "Bash(EWAY_USERNAME=* node eway-verify.js*)",
+      "Bash(EWAY_USERNAME=* EWAY_PASSWORD=* node eway-verify.js*)",
+      "Bash(ls *)",
+      "Bash(ls -* *)",
+      "Bash(find *)",
+      "Bash(grep *)"
+    ]
+  }
+}

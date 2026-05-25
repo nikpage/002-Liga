@@ -8,7 +8,7 @@ exports.search = async (payload) => {
   try {
     const { query } = payload;
     const vector = await getEmb(query);
-    const data = await getFullContext(vector, query);
+    const data = await getFullContext(vector, query, ['public_web']);
 
     const extractContent = await getAnswer([], buildExtractionPrompt(query, data));
 

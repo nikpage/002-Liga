@@ -6,11 +6,12 @@ const supabase = createClient(
   config.supabase.key
 );
 
-exports.getFullContext = async (embedding, query) => {
+exports.getFullContext = async (embedding, query, audienceFilter = null) => {
   const { data, error } = await supabase.rpc('match_chunks', {
     query_embedding: embedding,
     match_threshold: 0.45,
-    match_count: 30
+    match_count: 30,
+    audience_filter: audienceFilter
   }, {
     head: false,
     count: null
