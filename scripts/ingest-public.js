@@ -381,6 +381,7 @@ async function upsertChunks(pageUrl, chunks) {
       source_url: c.source_url,
       embedding,
       audience: AUDIENCE,
+      source: 'web',
       downloads: null,
       chunk_index: i
     });
