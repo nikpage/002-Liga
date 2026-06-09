@@ -10,7 +10,7 @@ const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
 const { getQALogs } = require('./database');
-const { login: ewayLogin } = require('./eway-crm');
+const { login: ewayLogin, callMethod: ewayCall } = require('./eway-crm');
 
 const app = express();
 app.use(cors());
@@ -117,6 +117,23 @@ app.get('/api/eway/test', async (req, res) => {
     try {
         const sessionId = await ewayLogin();
         res.json({ ok: true, sessionId });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Diagnostic: writes ONE clearly-marked test Journal entry and returns the raw
+// eWay-CRM response (including the created GUID). Delete this entry afterwards.
+app.get('/api/eway/test-journal', async (req, res) => {
+    try {
+        const stamp = new Date().toISOString();
+        const transmitObject = {
+            FileAs: `TEST – LigaQA pipeline check ${stamp}`,
+            Subject: `TEST – LigaQA pipeline check ${stamp}`,
+            Note: `Question:\nTest otázka (DELETE ME)\n\nAnswer:\nTest odpověď ověřující zápis do eWay-CRM. ${stamp}`
+        };
+        const result = await ewayCall('SaveJournal', { transmitObject });
+        res.json({ ok: true, returnCode: result.ReturnCode, guid: result.Guid, response: result });
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
