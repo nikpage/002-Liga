@@ -45,3 +45,21 @@ exports.getQALogs = async (limit = 500, offset = 0) => {
 
   return { logs: data || [], total: count };
 };
+
+exports.getAudienceCounts = async () => {
+  const { data, error } = await supabase
+    .from(config.supabase.tableName)
+    .select('audience');
+
+  if (error) {
+    console.error("AUDIENCE FETCH ERROR:", error);
+    throw error;
+  }
+
+  const counts = {};
+  (data || []).forEach(r => {
+    const key = r.audience === null ? 'null' : r.audience;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+};

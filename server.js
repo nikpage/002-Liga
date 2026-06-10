@@ -9,7 +9,7 @@ const path = require('path');
 const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
-const { getQALogs } = require('./database');
+const { getQALogs, getAudienceCounts } = require('./database');
 const { login: ewayLogin } = require('./eway-crm');
 
 const app = express();
@@ -109,6 +109,15 @@ app.get('/api/qa-logs', async (req, res) => {
     } catch (error) {
         console.error("QA Logs Route Error:", error);
         res.status(500).json({ error: 'Failed to fetch QA logs' });
+    }
+});
+
+// Diagnostic: lists distinct audience values in the chunks table with counts.
+app.get('/api/audiences', async (req, res) => {
+    try {
+        res.json(await getAudienceCounts());
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
