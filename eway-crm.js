@@ -100,6 +100,9 @@ const PORADNA_TYPE_GUID = 'd88bc4e5-23b6-40c3-b592-7025c2a62188'; // Typ = Porad
 const PROJECT_GUID = '8659c180-d43a-11f0-8dee-70d8233eee18';      // Sociální služby 2026
 const TYP_KONTAKTU_TELEFONICKY = 'efdd0548-0d7b-4764-b7e0-bfb0a9776984'; // af_50
 const FORMA_AMBULANTNI = 'a1618af4-4116-4c1e-b2ed-759e7c405e9e';         // af_41
+const CILOVA_SKUPINA_ZP = 'cae0f7df-6d07-4c85-8835-8b700b9b801f';        // _af_79 (multi)
+const SOC_POTREBNOST_CHUDOBA = '2532f1c2-dbab-452e-a921-a3c7df101beb';   // _af_80 (multi)
+const OBLAST_POTREB_STABILIZACE = 'cb5b92d1-ba51-4068-8ce7-45bf4f204586'; // _af_106 (multi)
 
 // Builds a short (~3-word) title from the question text.
 function threeWordTitle(question) {
@@ -161,8 +164,14 @@ function logQA(question, answer) {
                     ItemGUID: journalGuid,
                     TypeEn: PORADNA_TYPE_GUID,
                     AdditionalFields: {
-                        af_50: TYP_KONTAKTU_TELEFONICKY, // Typ kontaktu = telefonický
-                        af_41: FORMA_AMBULANTNI           // Forma = ambulantní
+                        af_50: TYP_KONTAKTU_TELEFONICKY,    // Typ kontaktu = telefonický
+                        af_41: FORMA_AMBULANTNI,            // Forma = ambulantní
+                        af_79: [CILOVA_SKUPINA_ZP],         // Cílová skupina (multi-select)
+                        af_80: [SOC_POTREBNOST_CHUDOBA],    // Sociální potřebnost (multi-select)
+                        af_106: [OBLAST_POTREB_STABILIZACE], // Por Oblast potřeb (multi-select)
+                        af_95: true,                        // Prvokontakt
+                        af_130: true,                       // Základní poradenství
+                        af_139: false                       // Zpětná vazba
                     }
                 }
             });
