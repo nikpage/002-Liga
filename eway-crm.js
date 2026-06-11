@@ -151,8 +151,13 @@ function logQA(question, answer) {
         });
 
     // Step 1: create the journal with its Type set.
+    // eWay only reliably commits/indexes a NEW item when the caller supplies
+    // its own ItemGUID; without it the API still returns rcSuccess + a Guid but
+    // the row is not stored. So we generate the GUID here and own it end-to-end.
+    const journalGuid = crypto.randomUUID();
     callMethod('SaveJournal', {
         transmitObject: {
+            ItemGUID: journalGuid,
             FileAs: title,
             Subject: title,
             Note: answer || '',
@@ -161,9 +166,7 @@ function logQA(question, answer) {
             EventEnd: iso(end)
         }
     })
-        .then(async saved => {
-            const journalGuid = saved && saved.Guid;
-            if (!journalGuid) throw new Error('SaveJournal returned no Guid');
+        .then(async () => {
             // Step 2: set the type-gated additional fields.
             await callMethod('SaveJournal', {
                 transmitObject: {
