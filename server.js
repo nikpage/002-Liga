@@ -348,10 +348,14 @@ app.get('/api/eway/fulltest', async (req, res) => {
         for (const f of ENUM_FIELDS) resolved[f.field] = resolve(f.field, f.label);
 
         // --- Build AdditionalFields (nested) ---
+        // The `_af_` prefix is a DB-column convention; in the AdditionalFields
+        // object the key drops the leading underscore (confirmed: read-back
+        // keys are all `af_NN`, and the eWay sample writes `af_29 => array()`).
+        const afKey = field => field.replace(/^_/, '');
         const AdditionalFields = { af_55: 1, af_54: 0, af_95: true, af_130: true, af_139: false };
         for (const f of ENUM_FIELDS) {
             const g = resolved[f.field].guid;
-            AdditionalFields[f.field] = f.multi ? [g] : g;
+            AdditionalFields[afKey(f.field)] = f.multi ? [g] : g;
         }
 
         const now = new Date();
@@ -390,9 +394,9 @@ app.get('/api/eway/fulltest', async (req, res) => {
             af_54_intervencePocet: Number(AF.af_54) === 0,
             af_50_typKontaktu: has(AF.af_50, resolved.af_50.guid),
             af_41_forma: has(AF.af_41, resolved.af_41.guid),
-            _af_79_cilovaSkupina: has(AF._af_79, resolved._af_79.guid),
-            _af_80_socPotrebnost: has(AF._af_80, resolved._af_80.guid),
-            _af_106_oblastPotreb: has(AF._af_106, resolved._af_106.guid),
+            _af_79_cilovaSkupina: has(AF.af_79, resolved._af_79.guid),
+            _af_80_socPotrebnost: has(AF.af_80, resolved._af_80.guid),
+            _af_106_oblastPotreb: has(AF.af_106, resolved._af_106.guid),
             af_95_prvokontakt: AF.af_95 === true || AF.af_95 === 1,
             af_130_zaklPoradenstvi: AF.af_130 === true || AF.af_130 === 1,
             af_139_zpetnaVazba: AF.af_139 === false || AF.af_139 === 0 || AF.af_139 == null,
