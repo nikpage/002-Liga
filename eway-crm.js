@@ -125,11 +125,17 @@ function threeWordTitle(question) {
 // underscore prefix). Kontakt/Intervence počet are computed by eWay, so they
 // are not set here.
 //
+// Records the outcome of the most recent logQA call so the real (production)
+// path can be diagnosed without server-log access. Surfaced via getLastLog().
+let lastLog = { state: 'never-called' };
+function getLastLog() { return lastLog; }
+
 // Fire-and-forget: resolves silently on success, logs errors to console.
 function logQA(question, answer) {
-    if (!cfg || !cfg.username) return; // CRM not configured, skip silently
+    if (!cfg || !cfg.username) { lastLog = { state: 'skipped-no-config', at: new Date().toISOString() }; return; }
 
     const title = threeWordTitle(question);
+    lastLog = { state: 'started', at: new Date().toISOString(), title };
     const contactGuid = Math.random() < 0.517 ? FEMALE_CONTACT_GUID : MALE_CONTACT_GUID;
     const start = new Date();
     const end = new Date(start.getTime() + (15 + Math.floor(Math.random() * 21)) * 60000);
@@ -178,10 +184,12 @@ function logQA(question, answer) {
             // Relations: Customer contact + superior project.
             await saveRelation(journalGuid, contactGuid, 'Contacts', 'CONTACT');
             await saveRelation(journalGuid, PROJECT_GUID, 'Projects', 'SUPERIORITEM');
+            lastLog = { state: 'success', at: new Date().toISOString(), title, guid: journalGuid };
         })
         .catch(err => {
+            lastLog = { state: 'error', at: new Date().toISOString(), title, error: err.message };
             console.error('EWAY QA LOG ERROR:', err.message);
         });
 }
 
-module.exports = { login, callMethod, logout, logQA };
+module.exports = { login, callMethod, logout, logQA, getLastLog };

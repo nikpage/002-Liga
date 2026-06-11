@@ -10,7 +10,7 @@ const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
 const { getQALogs, getAudienceCounts } = require('./database');
-const { login: ewayLogin, callMethod: ewayCall } = require('./eway-crm');
+const { login: ewayLogin, callMethod: ewayCall, getLastLog: ewayGetLastLog } = require('./eway-crm');
 
 const app = express();
 app.use(cors());
@@ -533,6 +533,12 @@ app.get('/api/eway/logqa-debug', async (req, res) => {
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message, steps });
     }
+});
+
+// Diagnostic: shows the outcome of the most recent real logQA call. Ask a
+// poradna question, then hit this to see whether eWay logging ran and its result.
+app.get('/api/eway/last-log', (req, res) => {
+    res.json({ ok: true, lastLog: ewayGetLastLog() });
 });
 
 // Handles TTS requests
