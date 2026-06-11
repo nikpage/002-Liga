@@ -99,7 +99,8 @@ function logQA(question, answer) {
     const transmitObject = {
         FileAs: title,
         Subject: title,
-        Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`
+        Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`,
+        TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188'
     };
 
     callMethod('SaveJournal', { transmitObject }).catch(err => {
