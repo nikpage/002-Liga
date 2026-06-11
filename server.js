@@ -194,15 +194,26 @@ app.get('/api/eway/change-password', async (req, res) => {
 // Confirms the Type column name, the Customer-relation format, and contact GUIDs.
 app.get('/api/eway/journal-sample', async (req, res) => {
     try {
-        const j = await ewayCall('SearchJournal', {
-            transmitObject: { TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188' },
-            includeForeignKeys: true,
-            includeRelations: true
-        });
-        const all = j.Data || [];
-        const withRel = all.filter(r => Array.isArray(r.Relations) && r.Relations.length);
-        const sample = (withRel.length ? withRel : all).slice(0, 3);
-        res.json({ ok: true, typeFilterReturned: all.length, sample });
+        const fetch = require('node-fetch');
+        const cfg = require('./config').eway;
+        const sid = await ewayLogin();
+        const base = cfg.serviceUrl.replace(/\/+$/, '');
+        const out = {};
+        for (const method of ['SearchJournal', 'SearchJournals']) {
+            const r = await fetch(`${base}/API.svc/${method}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: sid,
+                    transmitObject: {},
+                    includeForeignKeys: true,
+                    includeRelations: true
+                })
+            });
+            const text = await r.text();
+            out[method] = { status: r.status, body: text.slice(0, 1200) };
+        }
+        res.json({ ok: true, out });
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
