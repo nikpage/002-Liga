@@ -1,16 +1,19 @@
 const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext, logQA } = require('./database');
 const { logQA: logQAEway } = require('./eway-crm');
-const { buildPublicPrompt } = require('./prompts');
+const { buildPublicPrompt, buildPoradnaPrompt } = require('./prompts');
 
 exports.search = async (payload) => {
   const startTime = Date.now();
   try {
-    const { query } = payload;
+    const { query, tag } = payload;
+    const isInternal = tag === 'poradna_internal';
+    const audience = isInternal ? ['poradna_internal'] : ['public_web'];
+    const buildPrompt = isInternal ? buildPoradnaPrompt : buildPublicPrompt;
     const vector = await getEmb(query);
-    const data = await getFullContext(vector, query, ['public_web']);
+    const data = await getFullContext(vector, query, audience);
 
-    const extractContent = await getAnswer([], buildPublicPrompt(query, data));
+    const extractContent = await getAnswer([], buildPrompt(query, data));
 
     let result;
     const jsonMatch = extractContent.match(/\{[\s\S]*\}/);
@@ -67,8 +70,10 @@ exports.search = async (payload) => {
 
     // Fire-and-forget: log Q&A to database
     logQA(query, answer);
-    // Fire-and-forget: log Q&A to eWay-CRM as a Journal entry
-    logQAEway(query, answer);
+    // Fire-and-forget: log Q&A to eWay-CRM as a Journal entry (internal path only)
+    if (isInternal) {
+      logQAEway(query, answer);
+    }
 
     return { answer, downloads, metadata: { sources } };
   } catch (err) {
