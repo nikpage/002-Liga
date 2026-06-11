@@ -95,7 +95,17 @@ function logout() {
 const FEMALE_CONTACT_GUID = '358f0e1b-1345-11e9-9313-b0fc3636a08b'; // Anonym, Žena
 const MALE_CONTACT_GUID = 'f0476ebf-1342-11e9-9313-b0fc3636a08b';   // Anonym, Muž
 
-// Logs a Q&A pair as a Journal entry in eWay-CRM.
+// Poradna Journal type (Typ = Poradna).
+const PORADNA_TYPE_GUID = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
+
+// Logs a Q&A pair as a Journal entry in eWay-CRM with Typ=Poradna and a
+// Customer (CONTACT) relation to an anonymous contact.
+//
+// eWay ignores an inline `Relations` array on SaveJournal — relations must be
+// created with a separate SaveRelation call using the Relations-table schema
+// (ItemGUID1/FolderName1 = this item, ItemGUID2/FolderName2 = foreign item).
+// Confirmed against live eWay and the official eWay-CRM API sample.
+//
 // Fire-and-forget: resolves silently on success, logs errors to console.
 function logQA(question, answer) {
     if (!cfg || !cfg.username) return; // CRM not configured, skip silently
@@ -106,18 +116,27 @@ function logQA(question, answer) {
         FileAs: title,
         Subject: title,
         Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`,
-        TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188',
-        Relations: [{
-            ForeignFolderName: 'Contacts',
-            ForeignItemGUID: contactGuid,
-            RelationType: 'CONTACT',
-            DifferDirection: true
-        }]
+        TypeEn: PORADNA_TYPE_GUID
     };
 
-    callMethod('SaveJournal', { transmitObject }).catch(err => {
-        console.error('EWAY QA LOG ERROR:', err.message);
-    });
+    callMethod('SaveJournal', { transmitObject })
+        .then(saved => {
+            const journalGuid = saved && saved.Guid;
+            if (!journalGuid) throw new Error('SaveJournal returned no Guid');
+            return callMethod('SaveRelation', {
+                transmitObject: {
+                    ItemGUID1: journalGuid,
+                    FolderName1: 'Journal',
+                    ItemGUID2: contactGuid,
+                    FolderName2: 'Contacts',
+                    RelationType: 'CONTACT',
+                    DifferDirection: true
+                }
+            });
+        })
+        .catch(err => {
+            console.error('EWAY QA LOG ERROR:', err.message);
+        });
 }
 
 module.exports = { login, callMethod, logout, logQA };

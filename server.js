@@ -312,10 +312,14 @@ app.get('/api/eway/reltest', async (req, res) => {
         // Error probing revealed: needs `transmitObject` whose columns are
         // ItemGUID1/FolderName1 (this item) + ItemGUID2/FolderName2 (foreign).
         if (!winner) {
-            const shapes = [
-                { name: 'journal_primary', to: { ItemGUID1: guid, FolderName1: 'Journals', ItemGUID2: CONTACT, FolderName2: 'Contacts', RelationType: 'CONTACT', DifferDirection: true } },
-                { name: 'contact_primary', to: { ItemGUID1: CONTACT, FolderName1: 'Contacts', ItemGUID2: guid, FolderName2: 'Journals', RelationType: 'CONTACT', DifferDirection: true } }
-            ];
+            // 'Journals' was rejected ("FolderName not found"); the module is
+            // 'Journal' (singular) everywhere else in this codebase. Try the
+            // singular plus a couple of fallbacks to nail it in one pass.
+            const folderCandidates = ['Journal', 'Journals', 'Diary'];
+            const shapes = folderCandidates.map(fn => ({
+                name: `journalfolder_${fn}`,
+                to: { ItemGUID1: guid, FolderName1: fn, ItemGUID2: CONTACT, FolderName2: 'Contacts', RelationType: 'CONTACT', DifferDirection: true }
+            }));
             for (const shape of shapes) {
                 const relResp = await raw('SaveRelation', { transmitObject: shape.to });
                 after = await readBack(guid);
