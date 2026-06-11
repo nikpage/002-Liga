@@ -362,14 +362,17 @@ app.get('/api/eway/fulltest', async (req, res) => {
         const end = new Date(now.getTime() + (15 + Math.floor(Math.random() * 21)) * 60000);
         const iso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
         const title = 'ZZ FULLTEST kontrola';
-        const to = {
+        // Step 1: create with Type (Poradna) FIRST — the Poradna-specific
+        // DataType-8 fields only become writable once the Type is set.
+        const step1 = await raw('SaveJournal', { transmitObject: {
             FileAs: title, Subject: title, Note: 'Testovací odpověď poradny.',
-            TypeEn: POR, EventStart: iso(now), EventEnd: iso(end),
-            AdditionalFields
-        };
-        const created = await raw('SaveJournal', { transmitObject: to });
-        const guid = created.Guid;
-        if (!guid) return res.json({ ok: false, error: 'SaveJournal returned no Guid', created, resolved });
+            TypeEn: POR, EventStart: iso(now), EventEnd: iso(end)
+        } });
+        const guid = step1.Guid;
+        if (!guid) return res.json({ ok: false, error: 'SaveJournal (step1) returned no Guid', step1, resolved });
+        // Step 2: now that the record is typed Poradna, set the AdditionalFields.
+        const step2 = await raw('SaveJournal', { transmitObject: { ItemGUID: guid, TypeEn: POR, AdditionalFields } });
+        const created = step1;
 
         const saveRel = (foreignGuid, foreignFolder, relType) => raw('SaveRelation', {
             transmitObject: { ItemGUID1: guid, FolderName1: 'Journal', ItemGUID2: foreignGuid, FolderName2: foreignFolder, RelationType: relType, DifferDirection: true }
@@ -408,7 +411,7 @@ app.get('/api/eway/fulltest', async (req, res) => {
         const del = await raw('SaveJournal', { transmitObject: { ItemGUID: guid, Deleted: true } });
         res.json({
             ok: true, allPass, verdict, resolved,
-            saves: { create: created.ReturnCode, relContact: relContact.ReturnCode, relProject: relProject.ReturnCode, cleanup: del.ReturnCode },
+            saves: { step1_type: step1.ReturnCode, step2_fields: step2.ReturnCode, relContact: relContact.ReturnCode, relProject: relProject.ReturnCode, cleanup: del.ReturnCode },
             readBackAdditionalFields: AF,
             readBackTopLevelAfKeys: Object.keys(item).filter(k => /^_?af_\d+/.test(k)),
             relationsBack: rels
