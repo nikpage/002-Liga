@@ -10,7 +10,7 @@ const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
 const { getQALogs, getAudienceCounts } = require('./database');
-const { login: ewayLogin } = require('./eway-crm');
+const { login: ewayLogin, callMethod: ewayCall } = require('./eway-crm');
 
 const app = express();
 app.use(cors());
@@ -126,6 +126,17 @@ app.get('/api/eway/test', async (req, res) => {
     try {
         const sessionId = await ewayLogin();
         res.json({ ok: true, sessionId });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Diagnostic: dumps eWay-CRM field schema for Journal + SocialServices.
+app.get('/api/eway/fields', async (req, res) => {
+    try {
+        const journal = await ewayCall('GetAdditionalFields', { objectTypeName: 'Journal' });
+        const social = await ewayCall('GetAdditionalFields', { objectTypeName: 'SocialServices' });
+        res.json({ ok: true, journal, social });
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
