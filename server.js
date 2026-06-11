@@ -199,19 +199,26 @@ app.get('/api/eway/journal-sample', async (req, res) => {
         const sid = await ewayLogin();
         const base = cfg.serviceUrl.replace(/\/+$/, '');
         const out = {};
-        for (const method of ['SearchJournal', 'SearchJournals']) {
-            const r = await fetch(`${base}/API.svc/${method}`, {
+        const GUID = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
+        for (const prop of ['TypeEn', 'JournalTypeEn', 'EventTypeEn']) {
+            const r = await fetch(`${base}/API.svc/SearchJournals`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sessionId: sid,
-                    transmitObject: {},
+                    transmitObject: { [prop]: GUID },
                     includeForeignKeys: true,
                     includeRelations: true
                 })
             });
-            const text = await r.text();
-            out[method] = { status: r.status, body: text.slice(0, 1200) };
+            const data = await r.json();
+            const count = Array.isArray(data.Data) ? data.Data.length : 0;
+            // On success, return the first record that carries relations (or any record).
+            const sample = count
+                ? (data.Data.find(x => Array.isArray(x.Relations) && x.Relations.length) || data.Data[0])
+                : null;
+            out[prop] = { ReturnCode: data.ReturnCode, count, sample };
+            if (count) break;
         }
         res.json({ ok: true, out });
     } catch (error) {
