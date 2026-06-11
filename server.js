@@ -199,26 +199,24 @@ app.get('/api/eway/journal-sample', async (req, res) => {
         const sid = await ewayLogin();
         const base = cfg.serviceUrl.replace(/\/+$/, '');
         const out = {};
-        const GUID = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
-        for (const prop of ['TypeEn', 'JournalTypeEn', 'EventTypeEn']) {
-            const r = await fetch(`${base}/API.svc/SearchJournals`, {
+        for (const fileAs of ['Anonym, Žena', 'Anonym, žena', 'Anonym, Muž', 'Anonym, muž', 'Anonym']) {
+            const r = await fetch(`${base}/API.svc/SearchContacts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sessionId: sid,
-                    transmitObject: { [prop]: GUID },
-                    includeForeignKeys: true,
-                    includeRelations: true
+                    transmitObject: { FileAs: fileAs },
+                    includeForeignKeys: false,
+                    includeRelations: false
                 })
             });
             const data = await r.json();
-            const count = Array.isArray(data.Data) ? data.Data.length : 0;
-            // On success, return the first record that carries relations (or any record).
-            const sample = count
-                ? (data.Data.find(x => Array.isArray(x.Relations) && x.Relations.length) || data.Data[0])
-                : null;
-            out[prop] = { ReturnCode: data.ReturnCode, count, sample };
-            if (count) break;
+            const rows = Array.isArray(data.Data) ? data.Data : [];
+            out[fileAs] = {
+                ReturnCode: data.ReturnCode,
+                count: rows.length,
+                matches: rows.slice(0, 10).map(c => ({ ItemGUID: c.ItemGUID, FileAs: c.FileAs }))
+            };
         }
         res.json({ ok: true, out });
     } catch (error) {
