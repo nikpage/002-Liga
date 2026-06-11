@@ -287,6 +287,53 @@ app.get('/api/eway/schema', async (req, res) => {
     }
 });
 
+// Diagnostic: dumps real Poradna journals with every populated af_/_af_ field
+// and relations, so the exact write format for combos, multi-selects, and the
+// superior-project relation can be copied verbatim. Throwaway.
+app.get('/api/eway/poradna-sample', async (req, res) => {
+    try {
+        const fetch = require('node-fetch');
+        const cfg = require('./config').eway;
+        const base = cfg.serviceUrl.replace(/\/+$/, '');
+        const sid = await ewayLogin();
+        const r = await fetch(`${base}/API.svc/SearchJournals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: sid,
+                transmitObject: { TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188' },
+                includeForeignKeys: true,
+                includeRelations: true
+            })
+        });
+        const data = await r.json();
+        const rows = Array.isArray(data.Data) ? data.Data : [];
+        // Pick records that actually have the af fields we care about populated.
+        const KEYS = ['af_50', 'af_41', '_af_79', '_af_80', '_af_106', 'af_95', 'af_130', 'af_139', 'af_54', 'af_55'];
+        const scored = rows
+            .map(j => ({ j, filled: KEYS.filter(k => j[k] !== null && j[k] !== undefined && j[k] !== '' && j[k] !== 0).length }))
+            .sort((a, b) => b.filled - a.filled)
+            .slice(0, 3);
+        const samples = scored.map(({ j }) => {
+            const af = {};
+            for (const k of Object.keys(j)) {
+                if (/^_?af_\d+/.test(k) && j[k] !== null && j[k] !== undefined && j[k] !== '') af[k] = j[k];
+            }
+            return {
+                ItemGUID: j.ItemGUID,
+                FileAs: j.FileAs,
+                EventStart: j.EventStart,
+                EventEnd: j.EventEnd,
+                af,
+                Relations: j.Relations || []
+            };
+        });
+        res.json({ ok: true, count: rows.length, returnCode: data.ReturnCode, samples });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
