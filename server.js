@@ -131,6 +131,20 @@ app.get('/api/eway/test', async (req, res) => {
     }
 });
 
+// Diagnostic: dumps all eWay-CRM enum (dropdown) option values.
+app.get('/api/eway/enums', async (req, res) => {
+    try {
+        const enums = await ewayCall('GetEnumValues', {
+            transmitObject: {},
+            includeForeignKeys: false,
+            includeRelations: false
+        });
+        res.json({ ok: true, enums });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Diagnostic: dumps eWay-CRM field schema for Journal + SocialServices.
 app.get('/api/eway/fields', async (req, res) => {
     try {
