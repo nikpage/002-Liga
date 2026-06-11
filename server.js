@@ -190,6 +190,24 @@ app.get('/api/eway/change-password', async (req, res) => {
     }
 });
 
+// Diagnostic: dumps real Poradna Journal records WITH relations.
+// Confirms the Type column name, the Customer-relation format, and contact GUIDs.
+app.get('/api/eway/journal-sample', async (req, res) => {
+    try {
+        const j = await ewayCall('SearchJournal', {
+            transmitObject: { TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188' },
+            includeForeignKeys: true,
+            includeRelations: true
+        });
+        const all = j.Data || [];
+        const withRel = all.filter(r => Array.isArray(r.Relations) && r.Relations.length);
+        const sample = (withRel.length ? withRel : all).slice(0, 3);
+        res.json({ ok: true, typeFilterReturned: all.length, sample });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
