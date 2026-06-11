@@ -489,7 +489,16 @@ app.get('/api/eway/logqa-debug', async (req, res) => {
     const steps = [];
     try {
         const q = req.query.q || 'Jak požádat o příspěvek na péči a co k tomu potřebuji doložit?';
-        const a = req.query.a || ('# Odpověď\n\nDobrý den, '.padEnd(50, 'x') + '\n\n* bod 1\n* bod 2\n\n---\n# 📄 Zdroje\n1. [Test](https://example.com)');
+        // Default to a LONG, realistic poradna answer (markdown, Czech, links,
+        // emoji headers) to reproduce a production-sized Note. ?len= overrides.
+        const len = parseInt(req.query.len, 10) || 4000;
+        const para = 'Dobrý den, příspěvek na péči je dávka určená osobám, které potřebují pomoc jiné osoby. Žádost se podává na úřadu práce dle místa trvalého pobytu. K žádosti je třeba doložit doklad totožnosti a lékařské zprávy. ';
+        let a = req.query.a;
+        if (!a) {
+            a = '# Odpověď\n\n';
+            while (a.length < len) a += para;
+            a += '\n\n* první bod\n* druhý bod\n\n---\n# 📥 Ke stažení\n\n* [Formulář](https://example.com/f.pdf)\n\n---\n# 📄 Zdroje\n\n1. [Zákon](https://example.com/zakon)\n2. [MPSV](https://example.com/mpsv)';
+        }
         const title = (q || '').trim().split(/\s+/).filter(Boolean).slice(0, 3).join(' ') || 'Poradna';
         const start = new Date();
         const end = new Date(start.getTime() + 20 * 60000);
