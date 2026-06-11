@@ -224,6 +224,69 @@ app.get('/api/eway/journal-sample', async (req, res) => {
     }
 });
 
+// Diagnostic: discovers everything needed to fully populate a Poradna journal —
+// Additional-Field column names, the enum value GUIDs for the 5 dropdowns, and
+// the "Sociální služby 2026" project GUID. Throwaway; delete once baked in.
+app.get('/api/eway/schema', async (req, res) => {
+    try {
+        const fetch = require('node-fetch');
+        const cfg = require('./config').eway;
+        const base = cfg.serviceUrl.replace(/\/+$/, '');
+        const sid = await ewayLogin();
+        const raw = async (method, body) => {
+            const r = await fetch(`${base}/API.svc/${method}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: sid, ...body })
+            });
+            const text = await r.text();
+            try { return JSON.parse(text); } catch { return { raw: text }; }
+        };
+
+        // 1) Additional-field definitions for the Journal module.
+        const af = await raw('GetAdditionalFields', { objectTypeName: 'Journal' });
+        const afDefs = (af.Data || af.AdditionalFields || []).map(f => ({
+            FieldName: f.FieldName || f.ColumnName || f.InternalName,
+            Name: f.Name || f.FileAs,
+            Cs: f.Cs, En: f.En,
+            DataType: f.DataType || f.Type,
+            EnumTypeName: f.EnumTypeName || f.EnumType,
+            Guid: f.ItemGUID || f.Guid
+        }));
+
+        // 2) All enum values; filter to the labels we need to map to GUIDs.
+        const wanted = ['telefon', 'ambulant', 'zdravotn', 'chudob', 'stabilizac'];
+        const enums = await raw('GetEnumValues', { transmitObject: {}, includeForeignKeys: false, includeRelations: false });
+        const enumRows = (enums.Data || []).map(e => ({
+            EnumType: e.EnumType || e.EnumTypeName,
+            ItemGUID: e.ItemGUID,
+            En: e.En, Cs: e.Cs, FileAs: e.FileAs
+        }));
+        const enumMatches = enumRows.filter(e => {
+            const hay = `${e.En || ''} ${e.Cs || ''} ${e.FileAs || ''}`.toLowerCase();
+            return wanted.some(w => hay.includes(w));
+        });
+
+        // 3) The superior project "Sociální služby 2026".
+        const projOut = {};
+        for (const q of ['Sociální služby 2026', 'Sociální služby', 'Sociln', 'služby 2026']) {
+            const p = await raw('SearchProjects', { transmitObject: { FileAs: q }, includeForeignKeys: false, includeRelations: false });
+            projOut[q] = { ReturnCode: p.ReturnCode, matches: (p.Data || []).slice(0, 10).map(x => ({ ItemGUID: x.ItemGUID, FileAs: x.FileAs })) };
+        }
+
+        res.json({
+            ok: true,
+            journalAdditionalFields: afDefs,
+            afReturnCode: af.ReturnCode,
+            enumMatches,
+            enumTotal: enumRows.length,
+            projects: projOut
+        });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
