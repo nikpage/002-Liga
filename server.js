@@ -288,20 +288,25 @@ app.get('/api/eway/schema', async (req, res) => {
 });
 
 // Diagnostic: builds ONE complete Poradna journal (all 17 fields), reads it
-// back, and reports pass/fail per field, then deletes it. Learns the exact
-// write format for combo/multi-select AFs and the project relation by copying
-// a real "donor" record (read shape != write shape), so nothing is guessed.
+// back, and reports pass/fail per field, then deletes it. Nothing is guessed:
+// - Additional fields are written nested under `AdditionalFields` and read back
+//   from `item.AdditionalFields` (confirmed via the eWay-CRM API sample).
+// - Each dropdown value is resolved deterministically: the target Czech label
+//   is matched only within the enum type actually bound to that field (read
+//   from GetAdditionalFields), so e.g. the correct "telefonický" is chosen.
 // Throwaway: delete once logQA is baked and verified.
 app.get('/api/eway/fulltest', async (req, res) => {
-    // Known GUIDs (confirmed via /api/eway/schema).
     const POR = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
     const FEMALE = '358f0e1b-1345-11e9-9313-b0fc3636a08b';
     const PROJECT = '8659c180-d43a-11f0-8dee-70d8233eee18'; // Sociální služby 2026
-    const FORMA = 'a1618af4-4116-4c1e-b2ed-759e7c405e9e';     // ambulantní (af_41)
-    const CILOVA = 'cae0f7df-6d07-4c85-8835-8b700b9b801f';    // osoba se ZP (_af_79)
-    const SOCPOT = '2532f1c2-dbab-452e-a921-a3c7df101beb';    // ohrožení chudobou (_af_80)
-    const OBLAST = 'cb5b92d1-ba51-4068-8ce7-45bf4f204586';    // Základní stabilizace (_af_106)
-    const TEL_CANDIDATES = ['efdd0548-0d7b-4764-b7e0-bfb0a9776984', '0eec1508-5530-4a98-abd9-d6a5cccff20f'];
+    // Each combo/multi-select field → the exact Czech label to select.
+    const ENUM_FIELDS = [
+        { field: 'af_50', label: 'telefonický', multi: false },               // Typ kontaktu
+        { field: 'af_41', label: 'ambulantní', multi: false },                // Forma
+        { field: '_af_79', label: 'osoba se zdravotním postižením', multi: true }, // Cílová skupina
+        { field: '_af_80', label: 'ohrožení chudobou', multi: true },         // Sociální potřebnost
+        { field: '_af_106', label: 'základní stabilizace', multi: true }      // Por Oblast potřeb
+    ];
     try {
         const fetch = require('node-fetch');
         const cfg = require('./config').eway;
@@ -316,86 +321,81 @@ app.get('/api/eway/fulltest', async (req, res) => {
             try { return JSON.parse(text); } catch { return { raw: text }; }
         };
         const lc = s => String(s == null ? '' : s).toLowerCase();
-        // Substitute my target GUID into whatever shape the donor used.
-        const mimic = (donorVal, myGuid) => {
-            if (Array.isArray(donorVal)) {
-                if (donorVal.length && typeof donorVal[0] === 'object') {
-                    const k = Object.keys(donorVal[0]).find(x => /guid/i.test(x)) || 'ItemGUID';
-                    return [{ [k]: myGuid }];
-                }
-                return [myGuid];
-            }
-            return myGuid; // plain string GUID
+        const isGuid = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v);
+
+        // --- Resolve dropdown GUIDs deterministically ---
+        // 1) AF definitions → each field's set of candidate enum-type GUIDs.
+        const afResp = await raw('GetAdditionalFields', { objectTypeName: 'Journal' });
+        const afDefs = afResp.Data || afResp.AdditionalFields || [];
+        const defByField = {};
+        for (const d of afDefs) defByField[d.FieldName || d.ColumnName] = d;
+        // 2) All enum values, indexed for label+enum-type matching.
+        const enumResp = await raw('GetEnumValues', { transmitObject: {} });
+        const enumRows = (enumResp.Data || []).map(e => ({
+            EnumType: e.EnumType || e.EnumTypeName,
+            ItemGUID: e.ItemGUID,
+            names: [e.En, e.Cs, e.FileAs].map(lc)
+        }));
+        const resolve = (field, label) => {
+            const def = defByField[field] || {};
+            const typeGuids = new Set(Object.values(def).filter(isGuid).map(lc)); // enum-type lives in the def
+            const byLabel = enumRows.filter(e => e.names.includes(lc(label)));
+            const bound = byLabel.find(e => typeGuids.has(lc(e.EnumType)));
+            const chosen = bound || byLabel[0] || null;
+            return { guid: chosen && chosen.ItemGUID, matchedByType: !!bound, candidates: byLabel.length, defGuids: [...typeGuids] };
         };
+        const resolved = {};
+        for (const f of ENUM_FIELDS) resolved[f.field] = resolve(f.field, f.label);
 
-        // --- Donor: a real Poradna record with these fields populated. ---
-        const search = await raw('SearchJournals', {
-            transmitObject: { TypeEn: POR }, includeForeignKeys: true, includeRelations: true
-        });
-        const rows = Array.isArray(search.Data) ? search.Data : [];
-        const KEYS = ['af_50', 'af_41', '_af_79', '_af_80', '_af_106'];
-        const donor = rows
-            .map(j => ({ j, n: KEYS.filter(k => j[k]).length }))
-            .sort((a, b) => b.n - a.n)[0] || { j: {} };
-        const dj = donor.j;
-        const donorShapes = {};
-        for (const k of [...KEYS, 'EventStart']) donorShapes[k] = dj[k] ?? null;
-        // Resolve the right telefonický GUID: match the donor's af_50 if present.
-        let typKontaktu = TEL_CANDIDATES[0];
-        if (dj.af_50 && TEL_CANDIDATES.map(lc).includes(lc(dj.af_50))) typKontaktu = dj.af_50;
-        // Donor project relation (to copy RelationType/direction). Confirmed
-        // from live samples: SUPERIORITEM, DifferDirection true. Scan all rows.
-        const donorProjRel = rows.map(j => (j.Relations || []).find(r => lc(r.ForeignFolderName) === 'projects')).find(Boolean)
-            || { RelationType: 'SUPERIORITEM', DifferDirection: true };
+        // --- Build AdditionalFields (nested) ---
+        const AdditionalFields = { af_55: 1, af_54: 0, af_95: true, af_130: true, af_139: false };
+        for (const f of ENUM_FIELDS) {
+            const g = resolved[f.field].guid;
+            AdditionalFields[f.field] = f.multi ? [g] : g;
+        }
 
-        // --- Build the full journal ---
         const now = new Date();
         const end = new Date(now.getTime() + (15 + Math.floor(Math.random() * 21)) * 60000);
         const iso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
         const title = 'ZZ FULLTEST kontrola';
         const to = {
             FileAs: title, Subject: title, Note: 'Testovací odpověď poradny.',
-            TypeEn: POR,
-            EventStart: iso(now), EventEnd: iso(end),
-            af_55: 1, af_54: 0,                 // Kontakt počet / Intervence počet
-            af_50: typKontaktu, af_41: FORMA,   // Typ kontaktu / Forma (combos)
-            _af_79: mimic(dj._af_79, CILOVA),
-            _af_80: mimic(dj._af_80, SOCPOT),
-            _af_106: mimic(dj._af_106, OBLAST),
-            af_95: true, af_130: true, af_139: false // Prvokontakt / Zákl. poradenství / Zpětná vazba
+            TypeEn: POR, EventStart: iso(now), EventEnd: iso(end),
+            AdditionalFields
         };
         const created = await raw('SaveJournal', { transmitObject: to });
         const guid = created.Guid;
-        if (!guid) return res.json({ ok: false, error: 'SaveJournal returned no Guid', created, donorShapes });
+        if (!guid) return res.json({ ok: false, error: 'SaveJournal returned no Guid', created, resolved });
 
-        const saveRel = (foreignGuid, foreignFolder, relType, differ) => raw('SaveRelation', {
-            transmitObject: { ItemGUID1: guid, FolderName1: 'Journal', ItemGUID2: foreignGuid, FolderName2: foreignFolder, RelationType: relType, DifferDirection: differ }
+        const saveRel = (foreignGuid, foreignFolder, relType) => raw('SaveRelation', {
+            transmitObject: { ItemGUID1: guid, FolderName1: 'Journal', ItemGUID2: foreignGuid, FolderName2: foreignFolder, RelationType: relType, DifferDirection: true }
         });
-        const relContact = await saveRel(FEMALE, 'Contacts', 'CONTACT', true);
-        const relProject = await saveRel(PROJECT, 'Projects', donorProjRel.RelationType, donorProjRel.DifferDirection !== false);
+        const relContact = await saveRel(FEMALE, 'Contacts', 'CONTACT');
+        const relProject = await saveRel(PROJECT, 'Projects', 'SUPERIORITEM');
 
-        // --- Read back & verify ---
+        // --- Read back & verify (AFs come back nested) ---
         const back = await raw('SearchJournals', { transmitObject: { ItemGUID: guid }, includeForeignKeys: true, includeRelations: true });
         const item = (back.Data || [])[0] || {};
+        const AF = item.AdditionalFields || {};
         const rels = item.Relations || [];
         const hasRel = (folder, fguid) => rels.some(r => lc(r.ForeignFolderName) === folder && lc(r.ForeignItemGUID) === lc(fguid));
-        const contains = (val, guid) => lc(JSON.stringify(val)).includes(lc(guid));
+        const has = (val, guid) => guid && lc(JSON.stringify(val)).includes(lc(guid));
         const verdict = {
             TypeEn: item.TypeEn === POR,
-            Subject: !!item.Subject,
+            FileAs: !!item.FileAs,
             Note: !!item.Note,
             EventStart: !!item.EventStart,
             EventEnd: !!item.EventEnd,
-            af_55_kontaktPocet: Number(item.af_55) === 1,
-            af_54_intervencePocet: Number(item.af_54) === 0,
-            af_50_typKontaktu: contains(item.af_50, typKontaktu),
-            af_41_forma: contains(item.af_41, FORMA),
-            _af_79_cilovaSkupina: contains(item._af_79, CILOVA),
-            _af_80_socPotrebnost: contains(item._af_80, SOCPOT),
-            _af_106_oblastPotreb: contains(item._af_106, OBLAST),
-            af_95_prvokontakt: item.af_95 === true || item.af_95 === 1,
-            af_130_zaklPoradenstvi: item.af_130 === true || item.af_130 === 1,
-            af_139_zpetnaVazba: item.af_139 === false || item.af_139 === 0 || item.af_139 == null,
+            af_55_kontaktPocet: Number(AF.af_55) === 1,
+            af_54_intervencePocet: Number(AF.af_54) === 0,
+            af_50_typKontaktu: has(AF.af_50, resolved.af_50.guid),
+            af_41_forma: has(AF.af_41, resolved.af_41.guid),
+            _af_79_cilovaSkupina: has(AF._af_79, resolved._af_79.guid),
+            _af_80_socPotrebnost: has(AF._af_80, resolved._af_80.guid),
+            _af_106_oblastPotreb: has(AF._af_106, resolved._af_106.guid),
+            af_95_prvokontakt: AF.af_95 === true || AF.af_95 === 1,
+            af_130_zaklPoradenstvi: AF.af_130 === true || AF.af_130 === 1,
+            af_139_zpetnaVazba: AF.af_139 === false || AF.af_139 === 0 || AF.af_139 == null,
             contactRelation: hasRel('contacts', FEMALE),
             projectRelation: hasRel('projects', PROJECT)
         };
@@ -403,13 +403,10 @@ app.get('/api/eway/fulltest', async (req, res) => {
 
         const del = await raw('SaveJournal', { transmitObject: { ItemGUID: guid, Deleted: true } });
         res.json({
-            ok: true, allPass, verdict,
-            usedTypKontaktu: typKontaktu,
-            projectRelType: donorProjRel.RelationType,
-            donorGuid: dj.ItemGUID || null,
-            donorShapes,
+            ok: true, allPass, verdict, resolved,
             saves: { create: created.ReturnCode, relContact: relContact.ReturnCode, relProject: relProject.ReturnCode, cleanup: del.ReturnCode },
-            readBackAf: Object.fromEntries(Object.keys(item).filter(k => /^_?af_\d+/.test(k) && item[k] != null && item[k] !== '').map(k => [k, item[k]])),
+            readBackAdditionalFields: AF,
+            readBackTopLevelAfKeys: Object.keys(item).filter(k => /^_?af_\d+/.test(k)),
             relationsBack: rels
         });
     } catch (error) {
