@@ -308,17 +308,18 @@ app.get('/api/eway/reltest', async (req, res) => {
             if (after.hasContact) winner = 'B_update';
         }
 
-        // --- C: dedicated SaveRelation (try a couple param shapes) ---
+        // --- C: dedicated SaveRelation with the Relations-table schema ---
+        // Error probing revealed: needs `transmitObject` whose columns are
+        // ItemGUID1/FolderName1 (this item) + ItemGUID2/FolderName2 (foreign).
         if (!winner) {
             const shapes = [
-                { name: 'lowerCamel', params: { itemGuid: guid, folderName: 'Journals', foreignItemGuid: CONTACT, foreignFolderName: 'Contacts', relationType: 'CONTACT', differDirection: true } },
-                { name: 'PascalCase', params: { ItemGUID: guid, FolderName: 'Journals', ForeignItemGUID: CONTACT, ForeignFolderName: 'Contacts', RelationType: 'CONTACT', DifferDirection: true } },
-                { name: 'transmitObject', params: { transmitObject: { ItemGUID: guid, FolderName: 'Journals', ForeignItemGUID: CONTACT, ForeignFolderName: 'Contacts', RelationType: 'CONTACT', DifferDirection: true } } }
+                { name: 'journal_primary', to: { ItemGUID1: guid, FolderName1: 'Journals', ItemGUID2: CONTACT, FolderName2: 'Contacts', RelationType: 'CONTACT', DifferDirection: true } },
+                { name: 'contact_primary', to: { ItemGUID1: CONTACT, FolderName1: 'Contacts', ItemGUID2: guid, FolderName2: 'Journals', RelationType: 'CONTACT', DifferDirection: true } }
             ];
             for (const shape of shapes) {
-                const relResp = await raw('SaveRelation', shape.params);
+                const relResp = await raw('SaveRelation', { transmitObject: shape.to });
                 after = await readBack(guid);
-                steps.push({ step: `C_saverelation_${shape.name}`, save: { ReturnCode: relResp.ReturnCode, Description: relResp.Description }, readBack: after });
+                steps.push({ step: `C_saverelation_${shape.name}`, save: { ReturnCode: relResp.ReturnCode, Description: relResp.Description, Guid: relResp.Guid }, readBack: after });
                 if (after.hasContact) { winner = `C_saverelation_${shape.name}`; break; }
             }
         }
