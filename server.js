@@ -224,6 +224,124 @@ app.get('/api/eway/journal-sample', async (req, res) => {
     }
 });
 
+// Diagnostic: throwaway experiment to find which method actually attaches a
+// Customer (CONTACT) relation to a Journal. Tries, in order:
+//   A) inline Relations on SaveJournal (current logQA approach)
+//   B) two-step: create, then SaveJournal again with ItemGUID + Relations
+//   C) dedicated SaveRelation method
+// Reads the journal back after each step (includeRelations) and reports the
+// first method whose read-back shows the CONTACT relation. Deletes the test
+// record at the end. Safe to delete this endpoint once logQA is confirmed.
+app.get('/api/eway/reltest', async (req, res) => {
+    const POVERNA_TYPE = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
+    const CONTACT = '358f0e1b-1345-11e9-9313-b0fc3636a08b'; // Anonym, Žena
+    try {
+        const fetch = require('node-fetch');
+        const cfg = require('./config').eway;
+        const base = cfg.serviceUrl.replace(/\/+$/, '');
+        const sid = await ewayLogin();
+        const raw = async (method, body) => {
+            const r = await fetch(`${base}/API.svc/${method}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: sid, ...body })
+            });
+            const text = await r.text();
+            try { return JSON.parse(text); } catch { return { raw: text }; }
+        };
+        const readBack = async (guid) => {
+            const r = await raw('SearchJournals', {
+                transmitObject: { ItemGUID: guid },
+                includeForeignKeys: true,
+                includeRelations: true
+            });
+            const item = (r.Data || [])[0] || {};
+            const rels = item.Relations || [];
+            const hasContact = rels.some(rel =>
+                rel.RelationType === 'CONTACT' &&
+                String(rel.ForeignItemGUID || '').toLowerCase() === CONTACT.toLowerCase());
+            return { ReturnCode: r.ReturnCode, TypeEn: item.TypeEn, Relations: rels, hasContact };
+        };
+
+        const steps = [];
+        const ts = Date.now();
+        const fileAs = `ZZ_RELTEST_${ts}`;
+
+        // --- A: inline Relations on create ---
+        const inlineRelation = {
+            DifferDirection: true,
+            ForeignFolderName: 'Contacts',
+            ForeignItemGUID: CONTACT,
+            RelationType: 'CONTACT'
+        };
+        const createResp = await raw('SaveJournal', {
+            transmitObject: {
+                FileAs: fileAs,
+                Subject: fileAs,
+                Note: 'reltest',
+                TypeEn: POVERNA_TYPE,
+                Relations: [inlineRelation]
+            }
+        });
+        const guid = createResp.Guid;
+        steps.push({ step: 'A_create_inline', save: { ReturnCode: createResp.ReturnCode, Guid: guid, Description: createResp.Description } });
+        if (!guid) {
+            return res.json({ ok: false, error: 'No Guid returned from SaveJournal', steps });
+        }
+        let after = await readBack(guid);
+        steps[0].readBack = after;
+        let winner = after.hasContact ? 'A_inline' : null;
+
+        // --- B: update same item with ItemGUID + Relations ---
+        if (!winner) {
+            const updateResp = await raw('SaveJournal', {
+                transmitObject: {
+                    ItemGUID: guid,
+                    FileAs: fileAs,
+                    Subject: fileAs,
+                    TypeEn: POVERNA_TYPE,
+                    Relations: [{ ...inlineRelation, ItemGUID: guid, FolderName: 'Journals' }]
+                }
+            });
+            after = await readBack(guid);
+            steps.push({ step: 'B_update_with_guid', save: { ReturnCode: updateResp.ReturnCode, Description: updateResp.Description }, readBack: after });
+            if (after.hasContact) winner = 'B_update';
+        }
+
+        // --- C: dedicated SaveRelation (try a couple param shapes) ---
+        if (!winner) {
+            const shapes = [
+                { name: 'lowerCamel', params: { itemGuid: guid, folderName: 'Journals', foreignItemGuid: CONTACT, foreignFolderName: 'Contacts', relationType: 'CONTACT', differDirection: true } },
+                { name: 'PascalCase', params: { ItemGUID: guid, FolderName: 'Journals', ForeignItemGUID: CONTACT, ForeignFolderName: 'Contacts', RelationType: 'CONTACT', DifferDirection: true } },
+                { name: 'transmitObject', params: { transmitObject: { ItemGUID: guid, FolderName: 'Journals', ForeignItemGUID: CONTACT, ForeignFolderName: 'Contacts', RelationType: 'CONTACT', DifferDirection: true } } }
+            ];
+            for (const shape of shapes) {
+                const relResp = await raw('SaveRelation', shape.params);
+                after = await readBack(guid);
+                steps.push({ step: `C_saverelation_${shape.name}`, save: { ReturnCode: relResp.ReturnCode, Description: relResp.Description }, readBack: after });
+                if (after.hasContact) { winner = `C_saverelation_${shape.name}`; break; }
+            }
+        }
+
+        // --- cleanup ---
+        const del = await raw('SaveJournal', { transmitObject: { ItemGUID: guid, Deleted: true } });
+
+        res.json({
+            ok: true,
+            guid,
+            typeOk: after.TypeEn === POVERNA_TYPE,
+            winner,
+            verdict: winner
+                ? `Contact attaches via: ${winner}`
+                : 'NONE of A/B/C attached the contact — see steps for raw responses',
+            cleanup: del.ReturnCode,
+            steps
+        });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
