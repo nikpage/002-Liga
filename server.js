@@ -481,6 +481,51 @@ app.get('/api/eway/find-dropdowns', async (req, res) => {
     }
 });
 
+// Diagnostic: runs the exact logQA step sequence but surfaces each step's
+// outcome/error instead of swallowing it, so a production "nothing written"
+// failure can be diagnosed. ?q=&a= to supply realistic text. Throwaway.
+app.get('/api/eway/logqa-debug', async (req, res) => {
+    const POR = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
+    const steps = [];
+    try {
+        const q = req.query.q || 'Jak požádat o příspěvek na péči a co k tomu potřebuji doložit?';
+        const a = req.query.a || ('# Odpověď\n\nDobrý den, '.padEnd(50, 'x') + '\n\n* bod 1\n* bod 2\n\n---\n# 📄 Zdroje\n1. [Test](https://example.com)');
+        const title = (q || '').trim().split(/\s+/).filter(Boolean).slice(0, 3).join(' ') || 'Poradna';
+        const start = new Date();
+        const end = new Date(start.getTime() + 20 * 60000);
+        const iso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
+
+        let journalGuid = null;
+        try {
+            const s1 = await ewayCall('SaveJournal', { transmitObject: { FileAs: title, Subject: title, Note: a, TypeEn: POR, EventStart: iso(start), EventEnd: iso(end) } });
+            journalGuid = s1.Guid;
+            steps.push({ step: 'step1_create', ok: true, ReturnCode: s1.ReturnCode, Guid: journalGuid });
+        } catch (e) { steps.push({ step: 'step1_create', ok: false, error: e.message }); }
+
+        if (journalGuid) {
+            try {
+                const s2 = await ewayCall('SaveJournal', { transmitObject: { ItemGUID: journalGuid, TypeEn: POR, AdditionalFields: {
+                    af_50: 'efdd0548-0d7b-4764-b7e0-bfb0a9776984', af_41: 'a1618af4-4116-4c1e-b2ed-759e7c405e9e',
+                    af_79: ['cae0f7df-6d07-4c85-8835-8b700b9b801f'], af_80: ['2532f1c2-dbab-452e-a921-a3c7df101beb'], af_106: ['cb5b92d1-ba51-4068-8ce7-45bf4f204586'],
+                    af_95: true, af_130: true, af_139: false
+                } } });
+                steps.push({ step: 'step2_fields', ok: true, ReturnCode: s2.ReturnCode });
+            } catch (e) { steps.push({ step: 'step2_fields', ok: false, error: e.message }); }
+
+            for (const [fg, ff, rt] of [['358f0e1b-1345-11e9-9313-b0fc3636a08b', 'Contacts', 'CONTACT'], ['8659c180-d43a-11f0-8dee-70d8233eee18', 'Projects', 'SUPERIORITEM']]) {
+                try {
+                    const sr = await ewayCall('SaveRelation', { transmitObject: { ItemGUID1: journalGuid, FolderName1: 'Journal', ItemGUID2: fg, FolderName2: ff, RelationType: rt, DifferDirection: true } });
+                    steps.push({ step: `relation_${ff}`, ok: true, ReturnCode: sr.ReturnCode });
+                } catch (e) { steps.push({ step: `relation_${ff}`, ok: false, error: e.message }); }
+            }
+            await ewayCall('SaveJournal', { transmitObject: { ItemGUID: journalGuid, Deleted: true } }).catch(() => {});
+        }
+        res.json({ ok: true, allStepsOk: steps.every(s => s.ok), titleUsed: title, steps });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message, steps });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
