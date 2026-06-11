@@ -421,6 +421,62 @@ app.get('/api/eway/fulltest', async (req, res) => {
     }
 });
 
+// Diagnostic: hunts real Poradna journals for ones where the 3 DataType-8
+// dropdowns are actually populated, and dumps their full raw structure so the
+// real storage/format of those values can be seen (not guessed). Throwaway.
+app.get('/api/eway/find-dropdowns', async (req, res) => {
+    try {
+        const fetch = require('node-fetch');
+        const cfg = require('./config').eway;
+        const base = cfg.serviceUrl.replace(/\/+$/, '');
+        const sid = await ewayLogin();
+        const r = await fetch(`${base}/API.svc/SearchJournals`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: sid,
+                transmitObject: { TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188' },
+                includeForeignKeys: true, includeRelations: true
+            })
+        });
+        const data = await r.json();
+        const rows = Array.isArray(data.Data) ? data.Data : [];
+        const nonEmpty = v => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+        const probe = j => {
+            const AF = j.AdditionalFields || {};
+            // Look both inside AdditionalFields and at top level, with and
+            // without the underscore prefix, so wherever the value lives we see it.
+            const keys = ['af_79', '_af_79', 'af_80', '_af_80', 'af_106', '_af_106'];
+            const hitsAF = keys.filter(k => nonEmpty(AF[k]));
+            const hitsTop = keys.filter(k => nonEmpty(j[k]));
+            return { hitsAF, hitsTop };
+        };
+        const matches = [];
+        for (const j of rows) {
+            const p = probe(j);
+            if (p.hitsAF.length || p.hitsTop.length) {
+                matches.push({
+                    ItemGUID: j.ItemGUID, FileAs: j.FileAs,
+                    foundIn_AdditionalFields: p.hitsAF, foundIn_topLevel: p.hitsTop,
+                    AdditionalFields: j.AdditionalFields || null,
+                    af_topLevel: Object.fromEntries(Object.keys(j).filter(k => /^_?af_\d+/.test(k) && nonEmpty(j[k])).map(k => [k, j[k]])),
+                    relationFolders: (j.Relations || []).map(x => `${x.ForeignFolderName}:${x.RelationType}`)
+                });
+            }
+            if (matches.length >= 3) break;
+        }
+        // If nothing matched, dump one full raw record so we can see every key.
+        const sampleRawKeys = rows.length ? Object.keys(rows[0]) : [];
+        res.json({
+            ok: true, totalPoradna: rows.length, matchCount: matches.length,
+            matches,
+            note: matches.length ? 'See foundIn_* for where the DataType-8 values live.' : 'No Poradna journal returned these 3 fields in the search response.',
+            sampleRawKeys
+        });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Handles TTS requests
 app.post('/tts', async (req, res) => {
     try {
