@@ -110,6 +110,24 @@ function threeWordTitle(question) {
     return words.slice(0, 3).join(' ') || 'Poradna';
 }
 
+// Converts a markdown/rich answer into plain text for the eWay Note. Keeps the
+// words (and link URLs) but removes formatting markers and — critically —
+// emoji / non-BMP characters, which make eWay report success yet not store the
+// record. This mirrors the plain-text content the verified-working test saved.
+function toPlainNote(text) {
+    return String(text || '')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')   // [label](url) -> label (url)
+        .replace(/^\s{0,3}#{1,6}\s*/gm, '')                // headings
+        .replace(/^\s{0,3}>\s?/gm, '')                     // blockquotes
+        .replace(/^\s*[-*+]\s+/gm, '• ')                   // list bullets
+        .replace(/^\s*([-*_])\1{2,}\s*$/gm, '')            // horizontal rules
+        .replace(/[*_`~]/g, '')                            // bold/italic/code marks
+        .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}️‍]/gu, '') // emoji/symbols
+        .replace(/[ \t]+/g, ' ')                           // collapse spaces
+        .replace(/\n{3,}/g, '\n\n')                        // collapse blank lines
+        .trim();
+}
+
 // Logs a Q&A pair as a Poradna Journal in eWay-CRM. Verified-working fields:
 //   Typ=Poradna, ~3-word title, Note=answer, EventStart/End, Typ kontaktu,
 //   Forma, the anonymous Customer contact (51.7/48.3), and the SUPERIORITEM
@@ -150,23 +168,23 @@ function logQA(question, answer) {
             }
         });
 
-    // Step 1: create the journal with its Type set.
-    // eWay only reliably commits/indexes a NEW item when the caller supplies
-    // its own ItemGUID; without it the API still returns rcSuccess + a Guid but
-    // the row is not stored. So we generate the GUID here and own it end-to-end.
-    const journalGuid = crypto.randomUUID();
+    // Step 1: create the journal with its Type set. eWay accepts a rich/markdown
+    // Note and returns rcSuccess but silently fails to STORE the record when the
+    // Note contains emoji or other non-BMP characters; the verified-working test
+    // path saved plain text, so we strip the answer down to plain text here.
     callMethod('SaveJournal', {
         transmitObject: {
-            ItemGUID: journalGuid,
             FileAs: title,
             Subject: title,
-            Note: answer || '',
+            Note: toPlainNote(answer),
             TypeEn: PORADNA_TYPE_GUID,
             EventStart: iso(start),
             EventEnd: iso(end)
         }
     })
-        .then(async () => {
+        .then(async saved => {
+            const journalGuid = saved && saved.Guid;
+            if (!journalGuid) throw new Error('SaveJournal returned no Guid');
             // Step 2: set the type-gated additional fields.
             await callMethod('SaveJournal', {
                 transmitObject: {
