@@ -95,44 +95,80 @@ function logout() {
 const FEMALE_CONTACT_GUID = '358f0e1b-1345-11e9-9313-b0fc3636a08b'; // Anonym, Žena
 const MALE_CONTACT_GUID = 'f0476ebf-1342-11e9-9313-b0fc3636a08b';   // Anonym, Muž
 
-// Poradna Journal type (Typ = Poradna).
-const PORADNA_TYPE_GUID = 'd88bc4e5-23b6-40c3-b592-7025c2a62188';
+// eWay GUIDs (all confirmed against live eWay via diagnostic read-back).
+const PORADNA_TYPE_GUID = 'd88bc4e5-23b6-40c3-b592-7025c2a62188'; // Typ = Poradna
+const PROJECT_GUID = '8659c180-d43a-11f0-8dee-70d8233eee18';      // Sociální služby 2026
+const TYP_KONTAKTU_TELEFONICKY = 'efdd0548-0d7b-4764-b7e0-bfb0a9776984'; // af_50
+const FORMA_AMBULANTNI = 'a1618af4-4116-4c1e-b2ed-759e7c405e9e';         // af_41
 
-// Logs a Q&A pair as a Journal entry in eWay-CRM with Typ=Poradna and a
-// Customer (CONTACT) relation to an anonymous contact.
+// Builds a short (~3-word) title from the question text.
+function threeWordTitle(question) {
+    const words = (question || '').trim().split(/\s+/).filter(Boolean);
+    return words.slice(0, 3).join(' ') || 'Poradna';
+}
+
+// Logs a Q&A pair as a Poradna Journal in eWay-CRM. Verified-working fields:
+//   Typ=Poradna, ~3-word title, Note=answer, EventStart/End, Typ kontaktu,
+//   Forma, the anonymous Customer contact (51.7/48.3), and the SUPERIORITEM
+//   link to the "Sociální služby 2026" project.
 //
-// eWay ignores an inline `Relations` array on SaveJournal — relations must be
-// created with a separate SaveRelation call using the Relations-table schema
-// (ItemGUID1/FolderName1 = this item, ItemGUID2/FolderName2 = foreign item).
-// Confirmed against live eWay and the official eWay-CRM API sample.
+// Two confirmed eWay quirks drive the shape below:
+//   1. Relations are NOT saved inline on SaveJournal — each needs its own
+//      SaveRelation call (ItemGUID1/FolderName1 = item, ItemGUID2/FolderName2
+//      = foreign item).
+//   2. Type-specific additional fields are only writable AFTER the journal's
+//      Type is set, so we save Type first, then the AdditionalFields.
+// Additional fields are nested under `AdditionalFields` (key `af_NN`, no
+// underscore prefix). Kontakt/Intervence počet are computed by eWay, so they
+// are not set here.
 //
 // Fire-and-forget: resolves silently on success, logs errors to console.
 function logQA(question, answer) {
     if (!cfg || !cfg.username) return; // CRM not configured, skip silently
 
-    const title = (question || '').substring(0, 250).trim() || 'Q&A';
+    const title = threeWordTitle(question);
     const contactGuid = Math.random() < 0.517 ? FEMALE_CONTACT_GUID : MALE_CONTACT_GUID;
-    const transmitObject = {
-        FileAs: title,
-        Subject: title,
-        Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`,
-        TypeEn: PORADNA_TYPE_GUID
-    };
+    const start = new Date();
+    const end = new Date(start.getTime() + (15 + Math.floor(Math.random() * 21)) * 60000);
+    const iso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
 
-    callMethod('SaveJournal', { transmitObject })
-        .then(saved => {
+    const saveRelation = (journalGuid, foreignGuid, foreignFolder, relType) =>
+        callMethod('SaveRelation', {
+            transmitObject: {
+                ItemGUID1: journalGuid, FolderName1: 'Journal',
+                ItemGUID2: foreignGuid, FolderName2: foreignFolder,
+                RelationType: relType, DifferDirection: true
+            }
+        });
+
+    // Step 1: create the journal with its Type set.
+    callMethod('SaveJournal', {
+        transmitObject: {
+            FileAs: title,
+            Subject: title,
+            Note: answer || '',
+            TypeEn: PORADNA_TYPE_GUID,
+            EventStart: iso(start),
+            EventEnd: iso(end)
+        }
+    })
+        .then(async saved => {
             const journalGuid = saved && saved.Guid;
             if (!journalGuid) throw new Error('SaveJournal returned no Guid');
-            return callMethod('SaveRelation', {
+            // Step 2: set the type-gated additional fields.
+            await callMethod('SaveJournal', {
                 transmitObject: {
-                    ItemGUID1: journalGuid,
-                    FolderName1: 'Journal',
-                    ItemGUID2: contactGuid,
-                    FolderName2: 'Contacts',
-                    RelationType: 'CONTACT',
-                    DifferDirection: true
+                    ItemGUID: journalGuid,
+                    TypeEn: PORADNA_TYPE_GUID,
+                    AdditionalFields: {
+                        af_50: TYP_KONTAKTU_TELEFONICKY, // Typ kontaktu = telefonický
+                        af_41: FORMA_AMBULANTNI           // Forma = ambulantní
+                    }
                 }
             });
+            // Relations: Customer contact + superior project.
+            await saveRelation(journalGuid, contactGuid, 'Contacts', 'CONTACT');
+            await saveRelation(journalGuid, PROJECT_GUID, 'Projects', 'SUPERIORITEM');
         })
         .catch(err => {
             console.error('EWAY QA LOG ERROR:', err.message);
