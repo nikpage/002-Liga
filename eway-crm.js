@@ -90,20 +90,55 @@ function logout() {
     cachedSessionId = null;
 }
 
+// Resolves an eWay Contact ItemGUID by FileAs (tries casing variants). Cached.
+const contactGuidCache = {};
+async function resolveContactGuid(candidates) {
+    const key = candidates[0];
+    if (key in contactGuidCache) return contactGuidCache[key];
+    for (const fileAs of candidates) {
+        const data = await callMethod('SearchContacts', {
+            transmitObject: { FileAs: fileAs },
+            includeForeignKeys: false,
+            includeRelations: false
+        });
+        const rows = data.Data || [];
+        const match = rows.find(c => c.FileAs === fileAs) || rows[0];
+        if (match) { contactGuidCache[key] = match.ItemGUID; return match.ItemGUID; }
+    }
+    contactGuidCache[key] = null;
+    return null;
+}
+
+// Anonymous contacts used as the Journal "Kontakt" (Customer). 51.7% female / rest male.
+const FEMALE_CONTACT = ['Anonym, Žena', 'Anonym, žena'];
+const MALE_CONTACT = ['Anonym, Muž', 'Anonym, muž'];
+
 // Logs a Q&A pair as a Journal entry in eWay-CRM.
 // Fire-and-forget: resolves silently on success, logs errors to console.
 function logQA(question, answer) {
     if (!cfg || !cfg.username) return; // CRM not configured, skip silently
 
-    const title = (question || '').substring(0, 250).trim() || 'Q&A';
-    const transmitObject = {
-        FileAs: title,
-        Subject: title,
-        Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`,
-        TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188'
-    };
+    (async () => {
+        const title = (question || '').substring(0, 250).trim() || 'Q&A';
+        const transmitObject = {
+            FileAs: title,
+            Subject: title,
+            Note: `Question:\n${question || ''}\n\nAnswer:\n${answer || ''}`,
+            TypeEn: 'd88bc4e5-23b6-40c3-b592-7025c2a62188'
+        };
 
-    callMethod('SaveJournal', { transmitObject }).catch(err => {
+        const contactGuid = await resolveContactGuid(Math.random() < 0.517 ? FEMALE_CONTACT : MALE_CONTACT);
+        if (contactGuid) {
+            transmitObject.Relations = [{
+                ForeignFolderName: 'Contacts',
+                ForeignItemGUID: contactGuid,
+                RelationType: 'CONTACT',
+                DifferDirection: true
+            }];
+        }
+
+        await callMethod('SaveJournal', { transmitObject });
+    })().catch(err => {
         console.error('EWAY QA LOG ERROR:', err.message);
     });
 }
