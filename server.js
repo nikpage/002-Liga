@@ -408,9 +408,13 @@ app.get('/api/eway/fulltest', async (req, res) => {
         };
         const allPass = Object.values(verdict).every(Boolean);
 
-        const del = await raw('SaveJournal', { transmitObject: { ItemGUID: guid, Deleted: true } });
+        // ?keep=1 leaves the record in eWay so the 3 DataType-8 dropdowns
+        // (which SearchJournals can't read back) can be checked in the UI.
+        const keep = req.query.keep === '1';
+        const del = keep ? { ReturnCode: 'kept' } : await raw('SaveJournal', { transmitObject: { ItemGUID: guid, Deleted: true } });
         res.json({
             ok: true, allPass, verdict, resolved,
+            keptForUiCheck: keep ? { guid, FileAs: title, openInEway: 'Find this journal in eWay and check Cílová skupina / Sociální potřebnost / Por Oblast potřeb' } : null,
             saves: { step1_type: step1.ReturnCode, step2_fields: step2.ReturnCode, relContact: relContact.ReturnCode, relProject: relProject.ReturnCode, cleanup: del.ReturnCode },
             readBackAdditionalFields: AF,
             readBackTopLevelAfKeys: Object.keys(item).filter(k => /^_?af_\d+/.test(k)),
