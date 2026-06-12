@@ -24,6 +24,14 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
 
   let chunks = data || [];
 
+  // Events (DOBROklub rule, FB highlights) live under 'public_web'. They are
+  // relevant to every caller — including the internal poradna tool, which the
+  // website UI actually uses — so the evergreen event injections below always
+  // include public event data on top of the caller's own audience.
+  const eventAudiences = audienceFilter
+    ? Array.from(new Set([...audienceFilter, 'public_web']))
+    : null;
+
   // Always include currently-highlighted chunks (active events) even when they
   // rank too low in vector search to make the top-N. The match_chunks RPC is
   // pure semantic similarity and ignores highlight_until, so an active event
@@ -35,7 +43,7 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
       .select('id, content, document_title, source_url, downloads, source, highlight_until')
       .gte('highlight_until', nowIso)
       .order('highlight_until', { ascending: true });
-    if (audienceFilter) hlQuery = hlQuery.in('audience', audienceFilter);
+    if (eventAudiences) hlQuery = hlQuery.in('audience', eventAudiences);
 
     const { data: highlighted, error: hlError } = await hlQuery;
     if (hlError) {
@@ -65,7 +73,7 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
       .from('chunks')
       .select('id, content, document_title, source_url, downloads, source')
       .ilike('content', '%druhý čtvrtek v měsíci%');
-    if (audienceFilter) ruleQuery = ruleQuery.in('audience', audienceFilter);
+    if (eventAudiences) ruleQuery = ruleQuery.in('audience', eventAudiences);
 
     const { data: ruleChunks, error: ruleError } = await ruleQuery;
     if (ruleError) {

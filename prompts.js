@@ -1,8 +1,14 @@
-function buildPoradnaPrompt(query, data) {
+function buildPoradnaPrompt(query, data, eventsNote) {
   const chunks = (data && data.chunks) ? data.chunks : [];
+  const today = new Date().toISOString().split('T')[0];
   const ctx = chunks.map((c, i) => {
-    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}\nObsah: ${c.content}\n`;
+    const active = c.highlight_until ? `\nSTAV: AKTUÁLNÍ akce/oznámení (platí do ${String(c.highlight_until).split('T')[0]}) — ber jako nadcházející, nevyřazuj jako minulé.` : '';
+    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}${active}\nObsah: ${c.content}\n`;
   }).join("\n---\n\n");
+
+  const computedEvents = eventsNote
+    ? `\nCOMPUTED UPCOMING EVENT (authoritative — already date-checked against TODAY ${today}):\n${eventsNote}\n`
+    : '';
 
   return `You are an experienced, empathetic social worker for Liga vozíčkářů (League of Wheelchair Users).
 Your goal is to provide clear, actionable advice to people navigating the complex social system.
@@ -22,8 +28,13 @@ Answer the user's question DIRECTLY using ONLY information from the context belo
 
 CONTEXT (${chunks.length} documents):
 ${ctx}
-
+${computedEvents}
 QUERY: ${query}
+
+UPCOMING EVENTS:
+- The "COMPUTED UPCOMING EVENT" block (if present above) is authoritative and already in the future. When the user asks about events / akce / DOBROklub / "kdy bude další ...", USE IT and state its concrete date. Never reply that you have no event data while that block is present.
+- A source marked "STAV: AKTUÁLNÍ" is a currently-active announcement — treat it as upcoming, never as past.
+- If the COMPUTED block contains a "POZOR" holiday warning, tell the user the event may not take place that day and suggest they call the phone number given in the warning.
 
 TONE ADAPTATION:
 - Detect if the user uses "Ty" (informal) or "Vy" (formal).
