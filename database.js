@@ -56,6 +56,29 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
     console.error("HIGHLIGHT MERGE ERROR:", hlErr.message);
   }
 
+  // Always include the recurring-events rule chunk (DOBROklub "každý druhý
+  // čtvrtek v měsíci"). It's an evergreen constant the events note depends on,
+  // but vector search only surfaces it for some phrasings — a generic or
+  // misspelled "next event" query misses it, leaving the model with no data.
+  try {
+    let ruleQuery = supabase
+      .from('chunks')
+      .select('id, content, document_title, source_url, downloads, source')
+      .ilike('content', '%druhý čtvrtek v měsíci%');
+    if (audienceFilter) ruleQuery = ruleQuery.in('audience', audienceFilter);
+
+    const { data: ruleChunks, error: ruleError } = await ruleQuery;
+    if (ruleError) {
+      console.error("EVENTS RULE QUERY ERROR:", ruleError);
+    } else if (ruleChunks && ruleChunks.length) {
+      const seen = new Set(chunks.map(c => c.id));
+      const fresh = ruleChunks.filter(c => !seen.has(c.id));
+      chunks = fresh.concat(chunks);
+    }
+  } catch (ruleErr) {
+    console.error("EVENTS RULE MERGE ERROR:", ruleErr.message);
+  }
+
   return { chunks };
 };
 
