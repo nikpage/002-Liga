@@ -87,6 +87,27 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
     console.error("EVENTS RULE MERGE ERROR:", ruleErr.message);
   }
 
+  // Attach each chunk's audience (the match_chunks RPC doesn't return it) so
+  // callers can tell which sources actually built the answer — e.g. to give
+  // any answer that cites a poradna source the poradna (eWay-saved) treatment.
+  try {
+    const ids = chunks.map(c => c.id).filter(id => id !== undefined);
+    if (ids.length) {
+      const { data: audRows, error: audError } = await supabase
+        .from('chunks')
+        .select('id, audience')
+        .in('id', ids);
+      if (audError) {
+        console.error("AUDIENCE LOOKUP ERROR:", audError);
+      } else if (audRows) {
+        const audById = new Map(audRows.map(r => [r.id, r.audience]));
+        chunks = chunks.map(c => ({ ...c, audience: audById.get(c.id) }));
+      }
+    }
+  } catch (audErr) {
+    console.error("AUDIENCE MERGE ERROR:", audErr.message);
+  }
+
   return { chunks };
 };
 

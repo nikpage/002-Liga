@@ -9,10 +9,12 @@ exports.search = async (payload) => {
   try {
     const { query, tag } = payload;
     const isInternal = tag === 'poradna_internal';
-    const audience = isInternal ? ['poradna_internal'] : ['public_web'];
+    // Tags route the response path (prompt) and bookkeeping — they do NOT limit
+    // which sources may answer. Always search every source; if a question
+    // merits a mixed-source answer, give one.
     const buildPrompt = isInternal ? buildPoradnaPrompt : buildPublicPrompt;
     const vector = await getEmb(query);
-    const data = await getFullContext(vector, query, audience);
+    const data = await getFullContext(vector, query, null);
 
     const eventsNote = buildEventsNote(data.chunks, new Date());
 
@@ -73,8 +75,12 @@ exports.search = async (payload) => {
 
     // Fire-and-forget: log Q&A to database
     logQA(query, answer);
-    // Fire-and-forget: log Q&A to eWay-CRM as a Journal entry (internal path only)
-    if (isInternal) {
+    // Fire-and-forget: log Q&A to eWay-CRM as a Journal entry. Save is driven by
+    // the SOURCES that actually built the answer, not the request tag: any answer
+    // that cites a poradna source is legally/grant relevant and gets the poradna
+    // (eWay-saved) treatment — including mixed-source answers.
+    const usedPoradnaSource = citedChunks.some(c => c.audience === 'poradna_internal');
+    if (usedPoradnaSource) {
       logQAEway(query, answer);
     }
 
