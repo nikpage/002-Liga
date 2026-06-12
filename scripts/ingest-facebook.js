@@ -127,38 +127,33 @@ function placeText(place) {
   return parts.length ? `\nMísto: ${parts.join(', ')}` : '';
 }
 
-// Turns each Graph event into a chunk row. event_date = start_time (real,
-// possibly future); highlight_until = end_time (or start +3h) so retrieval
-// surfaces it as an active upcoming event until it ends. The date is also
-// written into the content text so the model can state it directly.
-async function buildEventRows(events) {
-  const rows = [];
-  for (const e of events) {
-    if (!e.start_time || !e.name) continue;
-    const start = new Date(e.start_time);
-    const highlight = e.end_time
-      ? new Date(e.end_time).toISOString()
-      : new Date(start.getTime() + 3 * 3600000).toISOString();
-    const desc = (e.description || '').trim();
-    const content = `Akce: ${e.name}\nDatum: ${formatCz(e.start_time)}` +
-      placeText(e.place) +
-      (desc ? `\n\n${desc.slice(0, 1500)}` : '');
+// Turns a Graph event into a chunk row (without embedding — that's added later
+// only for new/changed rows). event_date = start_time (real, possibly future);
+// highlight_until = end_time (or start +3h) so retrieval surfaces it as an
+// active upcoming event until it ends. The date is also written into the content
+// text so the model can state it directly. Returns null for undated events.
+function buildEventRow(e) {
+  if (!e.start_time || !e.name) return null;
+  const start = new Date(e.start_time);
+  const highlight = e.end_time
+    ? new Date(e.end_time).toISOString()
+    : new Date(start.getTime() + 3 * 3600000).toISOString();
+  const desc = (e.description || '').trim();
+  const content = `Akce: ${e.name}\nDatum: ${formatCz(e.start_time)}` +
+    placeText(e.place) +
+    (desc ? `\n\n${desc.slice(0, 1500)}` : '');
 
-    rows.push({
-      content,
-      document_title: `Liga vozíčkářů – akce: ${e.name}`,
-      source_url: `https://www.facebook.com/events/${e.id}`,
-      audience: AUDIENCE,
-      source: SOURCE,
-      chunk_index: 0,
-      event_date: start.toISOString(),
-      highlight_until: highlight,
-      downloads: null,
-      embedding: DRY_RUN ? null : await embed(content)
-    });
-    if (!DRY_RUN) await sleep(120);
-  }
-  return rows;
+  return {
+    content,
+    document_title: `Liga vozíčkářů – akce: ${e.name}`,
+    source_url: `https://www.facebook.com/events/${e.id}`,
+    audience: AUDIENCE,
+    source: SOURCE,
+    chunk_index: 0,
+    event_date: start.toISOString(),
+    highlight_until: highlight,
+    downloads: null
+  };
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -191,6 +186,46 @@ function isService(text) {
   return SERVICE_PATTERNS.some(rx => rx.test(text));
 }
 
+// Builds a post chunk row (without embedding). Posts keep event_date = post date;
+// dated events come from the Events endpoint, not captions.
+function buildPostRow(p) {
+  const text = p.message.trim();
+  const createdISO = p.created_time;
+  const highlight = isService(text)
+    ? new Date(new Date(createdISO).getTime() + HIGHLIGHT_DAYS * 86400000).toISOString()
+    : null;
+  return {
+    content: text,
+    document_title: `Liga vozíčkářů – Facebook (${createdISO.slice(0, 10)})`,
+    source_url: p.permalink_url || `https://facebook.com/${p.id}`,
+    audience: AUDIENCE,
+    source: SOURCE,
+    chunk_index: 0,
+    event_date: createdISO,
+    highlight_until: highlight,
+    downloads: null
+  };
+}
+
+// All currently-stored Facebook rows, as a Map(source_url -> content), so we can
+// tell what's new/changed/unchanged without re-reading embeddings. Paged to get
+// past the default row cap.
+async function loadExisting() {
+  const existing = new Map();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('chunks')
+      .select('source_url, content')
+      .eq('source', SOURCE)
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    for (const r of data || []) existing.set(r.source_url, r.content);
+    if (!data || data.length < PAGE) break;
+  }
+  return existing;
+}
+
 async function main() {
   if (!config.supabase.url || !config.supabase.key) throw new Error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY');
   if (!config.google.key) throw new Error('Missing GOOGLE_API_KEY');
@@ -210,64 +245,71 @@ async function main() {
 
   console.log(`Posts: ${all.length} total -> ${kept.length} after filter -> ${unique.length} after de-dupe`);
 
-  const rows = [];
-  for (let i = 0; i < unique.length; i++) {
-    const p = unique[i];
-    const text = p.message.trim();
-    const createdISO = p.created_time;                 // posts: event_date = post date
-    // Dated events come from the Facebook Events endpoint (see buildEventRows),
-    // not post captions. Posts keep the NEW window for service announcements.
-    const highlight = isService(text)
-      ? new Date(new Date(createdISO).getTime() + HIGHLIGHT_DAYS * 86400000).toISOString()
-      : null;
-
-    rows.push({
-      content: text,
-      document_title: `Liga vozíčkářů – Facebook (${createdISO.slice(0, 10)})`,
-      source_url: p.permalink_url || `https://facebook.com/${p.id}`,
-      audience: AUDIENCE,
-      source: SOURCE,
-      chunk_index: 0,
-      event_date: createdISO,
-      highlight_until: highlight,
-      downloads: null,
-      embedding: DRY_RUN ? null : await embed(text)
-    });
-    if (!DRY_RUN) await sleep(120); // gentle pacing to avoid hammering the quota
-    process.stdout.write(`\r  prepared ${i + 1}/${unique.length}...`);
-  }
-  process.stdout.write('\n');
-
   // Facebook Events — authoritative dated events (name + real start_time).
   const events = await getAllEvents(page.id);
-  const eventRows = await buildEventRows(events);
-  console.log(`Events: ${events.length} fetched -> ${eventRows.length} ingestable (with start_time).`);
-  rows.push(...eventRows);
+  const eventRows = events.map(buildEventRow).filter(Boolean);
+  console.log(`Events: ${events.length} fetched -> ${eventRows.length} dated.`);
+
+  // Candidate rows (no embeddings yet): events first, then posts.
+  const candidates = [...eventRows, ...unique.map(buildPostRow)];
+
+  // Incremental diff against what's already stored — so we embed/write only the
+  // delta instead of rebuilding (and re-embedding) every row each run.
+  const existing = await loadExisting();
+  const candUrls = new Set(candidates.map(c => c.source_url));
+  const newRows = candidates.filter(c => !existing.has(c.source_url));
+  const changedRows = candidates.filter(c => existing.has(c.source_url) && existing.get(c.source_url) !== c.content);
+  const unchanged = candidates.length - newRows.length - changedRows.length;
+  const orphans = [...existing.keys()].filter(u => !candUrls.has(u)); // removed on FB
+
+  console.log(`Diff vs DB (${existing.size} stored): ${newRows.length} new, ${changedRows.length} changed, ${unchanged} unchanged, ${orphans.length} to remove.`);
 
   if (DRY_RUN) {
-    console.log('\n[DRY RUN] would ingest these (no DB writes):');
-    console.log('\n-- Events (dated) --');
-    eventRows.forEach(r => console.log(`- ${r.document_title} | event_date=${r.event_date.slice(0, 10)} highlight_until=${r.highlight_until.slice(0, 10)}`));
-    console.log('\n-- Posts (sample) --');
-    rows.filter(r => r.document_title.includes('Facebook (')).slice(0, 8).forEach(r => console.log(`- ${r.document_title}${r.highlight_until ? ' [HL]' : ''} event_date=${r.event_date.slice(0, 10)}: ${r.content.slice(0, 60)}...`));
-    console.log(`\nTotal rows: ${rows.length} (${eventRows.length} events + ${rows.length - eventRows.length} posts).`);
+    if (newRows.length) {
+      console.log('\n[DRY RUN] new items (no DB writes):');
+      newRows.slice(0, 20).forEach(r => console.log(`+ ${r.document_title} | event_date=${r.event_date.slice(0, 10)}`));
+      if (newRows.length > 20) console.log(`  ...and ${newRows.length - 20} more.`);
+    } else {
+      console.log('\n[DRY RUN] Nothing new.');
+    }
     return;
   }
 
-  // Rebuild only the Facebook rows: delete then insert. Never touches website/eway rows.
-  const { error: delErr } = await supabase.from('chunks').delete().eq('source', SOURCE);
-  if (delErr) throw delErr;
-
-  // Insert in batches so the DB doesn't time out on one huge statement.
-  const BATCH = 100;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const slice = rows.slice(i, i + BATCH);
-    const { error: insErr } = await supabase.from('chunks').insert(slice);
-    if (insErr) throw insErr;
-    process.stdout.write(`\r  inserted ${Math.min(i + BATCH, rows.length)}/${rows.length}...`);
+  if (newRows.length === 0 && changedRows.length === 0 && orphans.length === 0) {
+    console.log('Nothing new today — DB already up to date. No embeddings spent.');
+    return;
   }
 
-  console.log(`\nIngested ${rows.length} Facebook posts into chunks (source='${SOURCE}').`);
+  // Embed only the new + changed rows.
+  const toWrite = [...newRows, ...changedRows];
+  for (let i = 0; i < toWrite.length; i++) {
+    toWrite[i].embedding = await embed(toWrite[i].content);
+    await sleep(120); // gentle pacing to avoid hammering the quota
+    process.stdout.write(`\r  embedded ${i + 1}/${toWrite.length}...`);
+  }
+  process.stdout.write('\n');
+
+  // Remove rows that are gone on FB, plus the old copies of changed rows
+  // (re-inserted below). Never touches website/eway rows. Batched for the
+  // URL-list filter.
+  const toDelete = [...orphans, ...changedRows.map(r => r.source_url)];
+  const DELBATCH = 100;
+  for (let i = 0; i < toDelete.length; i += DELBATCH) {
+    const slice = toDelete.slice(i, i + DELBATCH);
+    const { error: delErr } = await supabase.from('chunks').delete().eq('source', SOURCE).in('source_url', slice);
+    if (delErr) throw delErr;
+  }
+
+  // Insert new + changed in batches.
+  const BATCH = 100;
+  for (let i = 0; i < toWrite.length; i += BATCH) {
+    const slice = toWrite.slice(i, i + BATCH);
+    const { error: insErr } = await supabase.from('chunks').insert(slice);
+    if (insErr) throw insErr;
+    process.stdout.write(`\r  inserted ${Math.min(i + BATCH, toWrite.length)}/${toWrite.length}...`);
+  }
+
+  console.log(`\nDone. +${newRows.length} new, ~${changedRows.length} changed, -${orphans.length} removed (source='${SOURCE}'). ${unchanged} unchanged rows left as-is.`);
 }
 
 main().catch(err => { console.error('\nERROR:', err.message); process.exit(1); });
