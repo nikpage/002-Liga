@@ -246,9 +246,14 @@ async function main() {
   console.log(`Posts: ${all.length} total -> ${kept.length} after filter -> ${unique.length} after de-dupe`);
 
   // Facebook Events — authoritative dated events (name + real start_time).
+  // Only keep events that haven't ended yet: past events add nothing to
+  // "upcoming events" answers (the recap posts already cover history) and would
+  // just waste embeddings. highlight_until = event end (or start +3h).
+  const nowMs = new Date().getTime();
   const events = await getAllEvents(page.id);
-  const eventRows = events.map(buildEventRow).filter(Boolean);
-  console.log(`Events: ${events.length} fetched -> ${eventRows.length} dated.`);
+  const eventRows = events.map(buildEventRow)
+    .filter(r => r && new Date(r.highlight_until).getTime() >= nowMs);
+  console.log(`Events: ${events.length} fetched -> ${eventRows.length} upcoming/ongoing (past skipped).`);
 
   // Candidate rows (no embeddings yet): events first, then posts.
   const candidates = [...eventRows, ...unique.map(buildPostRow)];
