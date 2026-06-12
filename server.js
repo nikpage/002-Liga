@@ -6,6 +6,7 @@ try {
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const { search } = require('./search');
 const { getTTS } = require('./ai-client');
@@ -574,3 +575,48 @@ const port = process.env.PORT || 3000;
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
 });
+
+// Daily Facebook ingestion (posts + upcoming events). The script is incremental
+// and idempotent — it embeds only new/changed items and exits cheaply when
+// there's nothing new — so a daily run is safe. Runs in-process via cron and
+// spawns the existing script so all its token/diff logic is reused unchanged.
+// Disable with FB_CRON_DISABLED=true; only schedules when a token is available.
+(() => {
+    if (process.env.FB_CRON_DISABLED === 'true') {
+        console.log('FB ingestion cron disabled (FB_CRON_DISABLED=true).');
+        return;
+    }
+    const hasToken = !!process.env.FB_TOKEN || fs.existsSync(path.join(__dirname, 'fb-token.local'));
+    if (!hasToken) {
+        console.log('FB ingestion cron not scheduled: no FB token (set FB_TOKEN or fb-token.local).');
+        return;
+    }
+
+    const cron = require('node-cron');
+    const { spawn } = require('child_process');
+    const SCHEDULE = process.env.FB_CRON_SCHEDULE || '0 5 * * *'; // daily ~05:00 server time
+    let running = false;
+
+    const runIngest = () => {
+        if (running) { console.log('[fb-cron] previous run still going, skipping this tick.'); return; }
+        running = true;
+        console.log('[fb-cron] starting Facebook ingestion...');
+        const child = spawn(process.execPath, [path.join(__dirname, 'scripts', 'ingest-facebook.js')], {
+            cwd: __dirname,
+            env: process.env
+        });
+        child.stdout.on('data', d => process.stdout.write(`[fb-cron] ${d}`));
+        child.stderr.on('data', d => process.stderr.write(`[fb-cron] ${d}`));
+        child.on('close', code => {
+            running = false;
+            console.log(`[fb-cron] ingestion finished (exit ${code}).`);
+        });
+        child.on('error', err => {
+            running = false;
+            console.error(`[fb-cron] failed to start ingestion: ${err.message}`);
+        });
+    };
+
+    cron.schedule(SCHEDULE, runIngest);
+    console.log(`FB ingestion cron scheduled (${SCHEDULE}).`);
+})();
