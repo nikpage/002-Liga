@@ -78,7 +78,7 @@ async function resolvePage() {
 async function getAllPosts(pageId) {
   const posts = [];
   let url = build(`${pageId}/posts`, {
-    fields: 'id,created_time,message,permalink_url',
+    fields: 'id,created_time,message,permalink_url,attachments{type,target{id}},comments.summary(true).limit(0)',
     limit: '100'
   });
   while (url) {
@@ -105,6 +105,22 @@ async function getAllEvents(pageId) {
     url = page.paging && page.paging.next ? page.paging.next : null;
   }
   return events;
+}
+
+// All comments on a post (paged), with author id so we can keep only Liga's own.
+async function getComments(postId) {
+  const out = [];
+  let url = build(`${postId}/comments`, {
+    fields: 'id,from,message,created_time',
+    limit: '100',
+    order: 'chronological'
+  });
+  while (url) {
+    const page = await getJson(url);
+    for (const c of page.data || []) out.push(c);
+    url = page.paging && page.paging.next ? page.paging.next : null;
+  }
+  return out;
 }
 
 const CZ_WEEKDAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
@@ -251,12 +267,49 @@ async function main() {
   // just waste embeddings. highlight_until = event end (or start +3h).
   const nowMs = new Date().getTime();
   const events = await getAllEvents(page.id);
-  const eventRows = events.map(buildEventRow)
-    .filter(r => r && new Date(r.highlight_until).getTime() >= nowMs);
+  const eventPairs = events
+    .map(e => ({ e, row: buildEventRow(e) }))
+    .filter(p => p.row && new Date(p.row.highlight_until).getTime() >= nowMs);
+  const eventRows = eventPairs.map(p => p.row);
   console.log(`Events: ${events.length} fetched -> ${eventRows.length} upcoming/ongoing (past skipped).`);
 
-  // Candidate rows (no embeddings yet): events first, then posts.
-  const candidates = [...eventRows, ...unique.map(buildPostRow)];
+  // Liga's own comment answers on the upcoming events' promo posts. Only for
+  // current/live events and only Liga-authored comments — these clarify event
+  // details (time, place, accessibility). Tied to the event's highlight window,
+  // so they surface while the event is live and auto-expire (and get pruned)
+  // once it passes. Cheap: only posts linked to an upcoming event with >0
+  // comments are fetched.
+  const commentRows = [];
+  for (const { e, row } of eventPairs) {
+    // Link a post to the event by its FB event attachment — precise and cheap.
+    // (A name-text fallback was tried but over-matched common words like
+    // "Vinohradské" and fired a comment fetch per post; not worth the cost.)
+    const relPosts = all.filter(p => {
+      const att = (p.attachments && p.attachments.data) || [];
+      return att.some(a => a.type === 'event' && a.target && a.target.id === e.id);
+    });
+    for (const p of relPosts) {
+      if (!(p.comments && p.comments.summary && p.comments.summary.total_count)) continue;
+      const liga = (await getComments(p.id)).filter(c => c.from && c.from.id === page.id && (c.message || '').trim());
+      for (const c of liga) {
+        commentRows.push({
+          content: `Komentář Ligy k akci „${e.name}“ (${formatCz(e.start_time)}):\n${c.message.trim()}`,
+          document_title: `Liga vozíčkářů – komentář k akci: ${e.name}`,
+          source_url: `${p.permalink_url || `https://facebook.com/${p.id}`}#comment-${c.id}`,
+          audience: AUDIENCE,
+          source: SOURCE,
+          chunk_index: 0,
+          event_date: row.event_date,
+          highlight_until: row.highlight_until,
+          downloads: null
+        });
+      }
+    }
+  }
+  if (commentRows.length) console.log(`Liga comments on upcoming events: ${commentRows.length}.`);
+
+  // Candidate rows (no embeddings yet): events + Liga comments first, then posts.
+  const candidates = [...eventRows, ...commentRows, ...unique.map(buildPostRow)];
 
   // Incremental diff against what's already stored — so we embed/write only the
   // delta instead of rebuilding (and re-embedding) every row each run.
