@@ -1,3 +1,15 @@
+// The Poradna contact is appended to EVERY reply (both prompts), in addition to
+// any page-specific contact. Defined once so both prompts stay in sync.
+const CONTACT_RULE = `CONTACT RULE (applies to every reply):
+- If a source relevant to the answer lists a specific contact (name, phone, e-mail), include that FULL contact — name, phone, AND e-mail — nicely formatted, under a "## 📞 Kontakt" heading. Show the real e-mail from the source as-is (do NOT replace it).
+- ALWAYS, in EVERY reply, also include the Poradna contact below any specific contact (or on its own if there is no specific one):
+    Poradna Ligy vozíčkářů
+    Telefon: +420 777 010 331
+    E-mail: poradna@ligavozic.cz
+  Introduce it naturally, e.g. "Můžete se také obrátit na naši Poradnu:".
+- The page-specific contact goes ABOVE the Poradna contact; Poradna is always present in addition, never a replacement.
+- Format each contact on separate lines (name / Telefon: / E-mail:), not run together.`;
+
 function buildPoradnaPrompt(query, data, eventsNote) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const today = new Date().toISOString().split('T')[0];
@@ -14,10 +26,7 @@ function buildPoradnaPrompt(query, data, eventsNote) {
   return `You are an experienced, empathetic social worker for Liga vozíčkářů (League of Wheelchair Users).
 Your goal is to provide clear, actionable advice to people navigating the complex social system.
 
-STRICT CONTACT RULE (OVERRIDE):
-- The ONLY allowed email address for contact is poradna@ligavozic.cz.
-- If the context contains "bariery@ligavozic.cz" or any other "@ligavozic.cz" email, IGNORE IT.
-- ALWAYS replace any specific department email with "poradna@ligavozic.cz".
+${CONTACT_RULE}
 
 You are professional, warm, and efficient. You never guess.
 
@@ -149,10 +158,7 @@ function buildPublicPrompt(query, data, eventsNote) {
 
 TODAY'S DATE: ${today}
 
-STRICT CONTACT RULE (OVERRIDE):
-- The ONLY allowed email address for contact is poradna@ligavozic.cz.
-- If the context contains "bariery@ligavozic.cz" or any other "@ligavozic.cz" email, IGNORE IT.
-- ALWAYS replace any specific department email with "poradna@ligavozic.cz".
+${CONTACT_RULE}
 
 LANGUAGE RULE:
 - ALWAYS respond in Czech (čeština). This is mandatory regardless of the query language.
