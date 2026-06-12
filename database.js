@@ -22,7 +22,41 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
     throw error;
   }
 
-  return { chunks: data || [] };
+  let chunks = data || [];
+
+  // Always include currently-highlighted chunks (active events) even when they
+  // rank too low in vector search to make the top-N. The match_chunks RPC is
+  // pure semantic similarity and ignores highlight_until, so an active event
+  // post can otherwise be crowded out by older, more on-topic chunks.
+  try {
+    const nowIso = new Date().toISOString();
+    let hlQuery = supabase
+      .from('chunks')
+      .select('id, content, document_title, source_url, downloads, source, highlight_until')
+      .gte('highlight_until', nowIso)
+      .order('highlight_until', { ascending: true });
+    if (audienceFilter) hlQuery = hlQuery.in('audience', audienceFilter);
+
+    const { data: highlighted, error: hlError } = await hlQuery;
+    if (hlError) {
+      console.error("HIGHLIGHT QUERY ERROR:", hlError);
+    } else if (highlighted && highlighted.length) {
+      const hlById = new Map(highlighted.map(c => [c.id, c]));
+      // Stamp highlight_until on chunks already returned by the RPC so the
+      // "currently active" marker survives (the RPC doesn't return that field).
+      chunks = chunks.map(c =>
+        hlById.has(c.id) ? { ...c, highlight_until: hlById.get(c.id).highlight_until } : c
+      );
+      // Prepend the active highlights the RPC missed entirely.
+      const seen = new Set(chunks.map(c => c.id));
+      const fresh = highlighted.filter(c => !seen.has(c.id));
+      chunks = fresh.concat(chunks);
+    }
+  } catch (hlErr) {
+    console.error("HIGHLIGHT MERGE ERROR:", hlErr.message);
+  }
+
+  return { chunks };
 };
 
 exports.logQA = (question, answer) => {

@@ -2,6 +2,7 @@ const { getEmb, getAnswer } = require('./ai-client');
 const { getFullContext, logQA } = require('./database');
 const { logQA: logQAEway } = require('./eway-crm');
 const { buildPublicPrompt, buildPoradnaPrompt } = require('./prompts');
+const { buildEventsNote } = require('./events');
 
 exports.search = async (payload) => {
   const startTime = Date.now();
@@ -13,7 +14,9 @@ exports.search = async (payload) => {
     const vector = await getEmb(query);
     const data = await getFullContext(vector, query, audience);
 
-    const extractContent = await getAnswer([], buildPrompt(query, data));
+    const eventsNote = buildEventsNote(data.chunks, new Date());
+
+    const extractContent = await getAnswer([], buildPrompt(query, data, eventsNote));
 
     let result;
     const jsonMatch = extractContent.match(/\{[\s\S]*\}/);

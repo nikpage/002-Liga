@@ -118,13 +118,18 @@ Return JSON:
 }`;
 }
 
-function buildPublicPrompt(query, data) {
+function buildPublicPrompt(query, data, eventsNote) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
-    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}\nObsah: ${c.content}\n`;
+    const active = c.highlight_until ? `\nSTAV: AKTUÁLNÍ akce/oznámení (platí do ${String(c.highlight_until).split('T')[0]}) — ber jako nadcházející, nevyřazuj jako minulé.` : '';
+    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}${active}\nObsah: ${c.content}\n`;
   }).join("\n---\n\n");
 
   const today = new Date().toISOString().split('T')[0];
+
+  const computedEvents = eventsNote
+    ? `\nCOMPUTED UPCOMING EVENT (authoritative — already date-checked against TODAY):\n${eventsNote}\n`
+    : '';
 
   return `You are a friendly, warm assistant for Liga vozíčkářů (League of Wheelchair Users), answering questions on their public website.
 
@@ -143,7 +148,7 @@ Answer the user's question DIRECTLY using ONLY information from the context belo
 
 CONTEXT (${chunks.length} documents):
 ${ctx}
-
+${computedEvents}
 QUERY: ${query}
 
 TONE:
@@ -171,6 +176,8 @@ BRNO DISCLAIMER (NARROW):
 PAST EVENTS FILTER:
 - If the context contains multiple dated events, include ONLY those in the future relative to TODAY (${today}).
 - Skip past events silently.
+- The "COMPUTED UPCOMING EVENT" block (if present above) is authoritative and already in the future. When the user asks about upcoming events / akce / DOBROklub, USE IT and state its concrete date. Never reply that you have no event data while that block is present.
+- If that block contains a "POZOR" holiday warning, tell the user the event may not take place that day because it falls on a state holiday, and suggest they call the phone number given in the warning to confirm the date.
 
 LIGA VOZÍČKÁŘŮ PRIORITY RULE:
 - When listing multiple providers, services, or options, ALWAYS list Liga vozíčkářů's own services FIRST. Others follow in logical order.
