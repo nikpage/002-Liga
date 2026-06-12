@@ -42,8 +42,10 @@ const supabase = createClient(config.supabase.url, config.supabase.key);
 
 // Posts we deliberately exclude (joke videos with the same caption — value is in the video, not text).
 const SKIP_PATTERNS = [/S úsměvem to jede líp/i];
-// Heuristic: posts announcing a new service get the temporary "NEW" highlight.
-const SERVICE_PATTERNS = [/nová služba/i, /přichází s novou/i, /nový projekt/i, /spouštíme/i];
+// Service announcements get the temporary "NEW" highlight. Must mention a
+// *service* — earlier /přichází s novou/ matched event promos like "Sexy den
+// přichází s novou energií" and wrongly highlighted them as current.
+const SERVICE_PATTERNS = [/nová služba/i, /novou službu/i, /nové služby/i];
 
 async function getJson(url) {
   const res = await fetch(url);

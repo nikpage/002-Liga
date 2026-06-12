@@ -87,25 +87,30 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
     console.error("EVENTS RULE MERGE ERROR:", ruleErr.message);
   }
 
-  // Attach each chunk's audience (the match_chunks RPC doesn't return it) so
-  // callers can tell which sources actually built the answer — e.g. to give
-  // any answer that cites a poradna source the poradna (eWay-saved) treatment.
+  // Attach each chunk's audience + event_date (the match_chunks RPC returns
+  // neither). audience lets callers tell which sources built the answer (poradna
+  // eWay save). event_date lets the prompt's past-events filter judge whether a
+  // dated source is actually upcoming — without it the model lists past promo
+  // posts (which have no date in their text) as upcoming events.
   try {
     const ids = chunks.map(c => c.id).filter(id => id !== undefined);
     if (ids.length) {
-      const { data: audRows, error: audError } = await supabase
+      const { data: metaRows, error: metaError } = await supabase
         .from('chunks')
-        .select('id, audience')
+        .select('id, audience, event_date')
         .in('id', ids);
-      if (audError) {
-        console.error("AUDIENCE LOOKUP ERROR:", audError);
-      } else if (audRows) {
-        const audById = new Map(audRows.map(r => [r.id, r.audience]));
-        chunks = chunks.map(c => ({ ...c, audience: audById.get(c.id) }));
+      if (metaError) {
+        console.error("CHUNK META LOOKUP ERROR:", metaError);
+      } else if (metaRows) {
+        const metaById = new Map(metaRows.map(r => [r.id, r]));
+        chunks = chunks.map(c => {
+          const meta = metaById.get(c.id);
+          return meta ? { ...c, audience: meta.audience, event_date: meta.event_date } : c;
+        });
       }
     }
-  } catch (audErr) {
-    console.error("AUDIENCE MERGE ERROR:", audErr.message);
+  } catch (metaErr) {
+    console.error("CHUNK META MERGE ERROR:", metaErr.message);
   }
 
   return { chunks };

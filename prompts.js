@@ -3,7 +3,8 @@ function buildPoradnaPrompt(query, data, eventsNote) {
   const today = new Date().toISOString().split('T')[0];
   const ctx = chunks.map((c, i) => {
     const active = c.highlight_until ? `\nSTAV: AKTUÁLNÍ akce/oznámení (platí do ${String(c.highlight_until).split('T')[0]}) — ber jako nadcházející, nevyřazuj jako minulé.` : '';
-    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}${active}\nObsah: ${c.content}\n`;
+    const dated = c.event_date ? `\nDatum zdroje: ${String(c.event_date).split('T')[0]}` : '';
+    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}${dated}${active}\nObsah: ${c.content}\n`;
   }).join("\n---\n\n");
 
   const computedEvents = eventsNote
@@ -34,6 +35,7 @@ QUERY: ${query}
 UPCOMING EVENTS:
 - The "COMPUTED UPCOMING EVENT" block (if present above) is authoritative and already in the future. When the user asks about events / akce / DOBROklub / "kdy bude další ...", USE IT and state its concrete date. Never reply that you have no event data while that block is present.
 - A source marked "STAV: AKTUÁLNÍ" is a currently-active announcement — treat it as upcoming, never as past.
+- A source counts as an UPCOMING event ONLY if it has a date (its "Datum zdroje", a date in its text, or the COMPUTED block) on or after TODAY (${today}). A source whose "Datum zdroje" is BEFORE TODAY is PAST — do NOT list it as upcoming even if its wording sounds promotional ("přichází", "zveme vás", "6. ročník"). Promotional tone is not a date.
 - If the COMPUTED block contains a "POZOR" holiday warning, tell the user the event may not take place that day and suggest they call the phone number given in the warning.
 
 TONE ADAPTATION:
@@ -133,7 +135,8 @@ function buildPublicPrompt(query, data, eventsNote) {
   const chunks = (data && data.chunks) ? data.chunks : [];
   const ctx = chunks.map((c, i) => {
     const active = c.highlight_until ? `\nSTAV: AKTUÁLNÍ akce/oznámení (platí do ${String(c.highlight_until).split('T')[0]}) — ber jako nadcházející, nevyřazuj jako minulé.` : '';
-    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}${active}\nObsah: ${c.content}\n`;
+    const dated = c.event_date ? `\nDatum zdroje: ${String(c.event_date).split('T')[0]}` : '';
+    return `[Zdroj ${i}]\nNázev: ${c.document_title}\nURL: ${c.source_url || 'Bez URL'}\nSoubory ke stažení: ${c.downloads || 'Žádné'}${dated}${active}\nObsah: ${c.content}\n`;
   }).join("\n---\n\n");
 
   const today = new Date().toISOString().split('T')[0];
@@ -185,7 +188,8 @@ BRNO DISCLAIMER (NARROW):
 - Do NOT include it for events, general info, or contact queries.
 
 PAST EVENTS FILTER:
-- If the context contains multiple dated events, include ONLY those in the future relative to TODAY (${today}).
+- A source counts as an UPCOMING event ONLY if it has a date (its "Datum zdroje", a date in its text, or the COMPUTED block) that is on or after TODAY (${today}). List only those.
+- CRITICAL: a source whose "Datum zdroje" is BEFORE TODAY is a PAST/historical post — do NOT list it as an upcoming event, even if its wording sounds promotional ("přichází", "zveme vás", "nenechte si ujít", "6. ročník"). Promotional tone is not a date. If there is no future date for an item, do not present it as upcoming.
 - Skip past events silently.
 - The "COMPUTED UPCOMING EVENT" block (if present above) is authoritative and already in the future. When the user asks about upcoming events / akce / DOBROklub, USE IT and state its concrete date. Never reply that you have no event data while that block is present.
 - If that block contains a "POZOR" holiday warning, tell the user the event may not take place that day because it falls on a state holiday, and suggest they call the phone number given in the warning to confirm the date.
