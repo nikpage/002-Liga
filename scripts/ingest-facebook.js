@@ -91,6 +91,76 @@ async function getAllPosts(pageId) {
   return posts;
 }
 
+// Liga's Facebook Events — the authoritative source of advertised event dates
+// (the marketing posts rarely state the date in text; the Event object does).
+async function getAllEvents(pageId) {
+  const events = [];
+  let url = build(`${pageId}/events`, {
+    fields: 'id,name,description,start_time,end_time,place{name,location{street,city}}',
+    limit: '100'
+  });
+  while (url) {
+    const page = await getJson(url);
+    for (const e of page.data || []) events.push(e);
+    url = page.paging && page.paging.next ? page.paging.next : null;
+  }
+  return events;
+}
+
+const CZ_WEEKDAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+
+// Formats a Graph start_time ("2026-09-19T14:00:00+0200") as Czech wall-clock,
+// reading the components straight from the string so the displayed time matches
+// the event's own timezone (no UTC shifting).
+function formatCz(iso) {
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return String(iso);
+  const [, y, mo, d, hh, mm] = m;
+  const weekday = CZ_WEEKDAYS[new Date(Date.UTC(+y, +mo - 1, +d)).getUTCDay()];
+  return `${weekday} ${+d}. ${+mo}. ${y} ${hh}:${mm}`;
+}
+
+function placeText(place) {
+  if (!place) return '';
+  const loc = place.location || {};
+  const parts = [place.name, loc.street, loc.city].filter(Boolean);
+  return parts.length ? `\nMísto: ${parts.join(', ')}` : '';
+}
+
+// Turns each Graph event into a chunk row. event_date = start_time (real,
+// possibly future); highlight_until = end_time (or start +3h) so retrieval
+// surfaces it as an active upcoming event until it ends. The date is also
+// written into the content text so the model can state it directly.
+async function buildEventRows(events) {
+  const rows = [];
+  for (const e of events) {
+    if (!e.start_time || !e.name) continue;
+    const start = new Date(e.start_time);
+    const highlight = e.end_time
+      ? new Date(e.end_time).toISOString()
+      : new Date(start.getTime() + 3 * 3600000).toISOString();
+    const desc = (e.description || '').trim();
+    const content = `Akce: ${e.name}\nDatum: ${formatCz(e.start_time)}` +
+      placeText(e.place) +
+      (desc ? `\n\n${desc.slice(0, 1500)}` : '');
+
+    rows.push({
+      content,
+      document_title: `Liga vozíčkářů – akce: ${e.name}`,
+      source_url: `https://www.facebook.com/events/${e.id}`,
+      audience: AUDIENCE,
+      source: SOURCE,
+      chunk_index: 0,
+      event_date: start.toISOString(),
+      highlight_until: highlight,
+      downloads: null,
+      embedding: DRY_RUN ? null : await embed(content)
+    });
+    if (!DRY_RUN) await sleep(120);
+  }
+  return rows;
+}
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // getEmb but resilient to Google's rate limit (429 / resource exhausted): back off and retry.
@@ -144,7 +214,9 @@ async function main() {
   for (let i = 0; i < unique.length; i++) {
     const p = unique[i];
     const text = p.message.trim();
-    const createdISO = p.created_time;                 // event_date = when it was posted
+    const createdISO = p.created_time;                 // posts: event_date = post date
+    // Dated events come from the Facebook Events endpoint (see buildEventRows),
+    // not post captions. Posts keep the NEW window for service announcements.
     const highlight = isService(text)
       ? new Date(new Date(createdISO).getTime() + HIGHLIGHT_DAYS * 86400000).toISOString()
       : null;
@@ -166,10 +238,19 @@ async function main() {
   }
   process.stdout.write('\n');
 
+  // Facebook Events — authoritative dated events (name + real start_time).
+  const events = await getAllEvents(page.id);
+  const eventRows = await buildEventRows(events);
+  console.log(`Events: ${events.length} fetched -> ${eventRows.length} ingestable (with start_time).`);
+  rows.push(...eventRows);
+
   if (DRY_RUN) {
     console.log('\n[DRY RUN] would ingest these (no DB writes):');
-    rows.slice(0, 10).forEach(r => console.log(`- ${r.document_title}${r.highlight_until ? ' [NEW]' : ''}: ${r.content.slice(0, 80)}...`));
-    console.log(`...and ${Math.max(0, rows.length - 10)} more. Total: ${rows.length}`);
+    console.log('\n-- Events (dated) --');
+    eventRows.forEach(r => console.log(`- ${r.document_title} | event_date=${r.event_date.slice(0, 10)} highlight_until=${r.highlight_until.slice(0, 10)}`));
+    console.log('\n-- Posts (sample) --');
+    rows.filter(r => r.document_title.includes('Facebook (')).slice(0, 8).forEach(r => console.log(`- ${r.document_title}${r.highlight_until ? ' [HL]' : ''} event_date=${r.event_date.slice(0, 10)}: ${r.content.slice(0, 60)}...`));
+    console.log(`\nTotal rows: ${rows.length} (${eventRows.length} events + ${rows.length - eventRows.length} posts).`);
     return;
   }
 
