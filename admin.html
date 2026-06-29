@@ -336,29 +336,46 @@
             const union = A.size + B.size - inter;
             return union ? inter / union : 0;
         }
-        const KB_MATCH_MIN = 0.3;
-        // Best-matching word in the text for the query (for centering the snippet).
+        const KB_MATCH_MIN = 0.4;
+        // Query split into search tokens; single letters are ignored so a query
+        // like "sexy" never matches stray words such as "s" or "se".
+        function kbQueryTokens(query) {
+            return kbNorm((query || '').trim()).split(/[^\p{L}\p{N}]+/u).filter(t => t.length >= 2);
+        }
+        // Does a content word match a query token? It must CONTAIN the token, or
+        // be a genuine close typo of it (similar length + high similarity) —
+        // never just be a short fragment of the token.
+        function kbWordHitsToken(nw, t) {
+            if (nw.includes(t)) return 1;
+            if (Math.abs(nw.length - t.length) <= 2) {
+                const s = kbSim(nw, t);
+                if (s >= KB_MATCH_MIN) return s;
+            }
+            return 0;
+        }
+        // Best-matching word in the text (for centering the snippet).
         function kbBestMatch(content, query) {
-            const nq = kbNorm((query || '').trim());
-            if (!nq) return null;
+            const tokens = kbQueryTokens(query);
+            if (!tokens.length) return null;
             const re = /[\p{L}\p{N}]+/gu;
             let m, best = null;
             while ((m = re.exec(content)) !== null) {
                 const nw = kbNorm(m[0]);
-                const score = (nw.includes(nq) || nq.includes(nw)) ? 1 : kbSim(nw, nq);
-                if (!best || score > best.score) best = { index: m.index, length: m[0].length, score };
+                let score = 0;
+                for (const t of tokens) { const s = kbWordHitsToken(nw, t); if (s > score) score = s; }
+                if (score > 0 && (!best || score > best.score)) best = { index: m.index, length: m[0].length, score };
             }
             return best;
         }
-        // Highlight every word in a piece of text that matches the query.
+        // Highlight every word that matches any query token.
         function kbHighlightAll(content, query) {
-            const nq = kbNorm((query || '').trim());
-            if (!nq) return escapeHtml(content);
+            const tokens = kbQueryTokens(query);
+            if (!tokens.length) return escapeHtml(content);
             const re = /[\p{L}\p{N}]+/gu;
             let out = '', last = 0, m;
             while ((m = re.exec(content)) !== null) {
                 const word = m[0], nw = kbNorm(word);
-                const hit = nw.includes(nq) || nq.includes(nw) || kbSim(nw, nq) >= KB_MATCH_MIN;
+                const hit = tokens.some(t => kbWordHitsToken(nw, t) > 0);
                 out += escapeHtml(content.slice(last, m.index));
                 out += hit ? '<mark>' + escapeHtml(word) + '</mark>' : escapeHtml(word);
                 last = m.index + word.length;
