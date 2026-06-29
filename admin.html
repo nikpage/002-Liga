@@ -61,6 +61,8 @@
         .kb-table td.kb-content { max-width: 440px; }
         .kb-preview { white-space: pre-wrap; word-break: break-word; max-height: 72px; overflow: hidden; cursor: pointer; }
         .kb-preview.expanded { max-height: none; }
+        .kb-preview mark { background: #ffe28a; color: #000; padding: 0 1px; border-radius: 2px; }
+        .kb-loose { color: #b26a00; }
         .kb-meta { color: #999; font-size: 0.77em; margin-top: 3px; }
         .aud-tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.75em; font-weight: 600; }
         .aud-public { background: #d0f0c0; color: #1a5c00; }
@@ -294,6 +296,85 @@
             return d.innerHTML;
         }
 
+        // --- Search-result highlighting: show WHY each result matched. ---
+        // Lower-case + strip diacritics so "Ščučin" and "scucin" compare equal.
+        function kbNorm(s) {
+            return (s || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+        }
+        function kbTrigrams(s) {
+            const p = '  ' + s + ' ';
+            const out = new Set();
+            for (let i = 0; i < p.length - 2; i++) out.add(p.slice(i, i + 3));
+            return out;
+        }
+        // pg_trgm-style similarity (shared trigrams / union), 0..1.
+        function kbSim(a, b) {
+            if (!a || !b) return 0;
+            const A = kbTrigrams(a), B = kbTrigrams(b);
+            let inter = 0;
+            A.forEach(t => { if (B.has(t)) inter++; });
+            const union = A.size + B.size - inter;
+            return union ? inter / union : 0;
+        }
+        const KB_MATCH_MIN = 0.3;
+        // Best-matching word in the text for the query (for centering the snippet).
+        function kbBestMatch(content, query) {
+            const nq = kbNorm((query || '').trim());
+            if (!nq) return null;
+            const re = /[\p{L}\p{N}]+/gu;
+            let m, best = null;
+            while ((m = re.exec(content)) !== null) {
+                const nw = kbNorm(m[0]);
+                const score = (nw.includes(nq) || nq.includes(nw)) ? 1 : kbSim(nw, nq);
+                if (!best || score > best.score) best = { index: m.index, length: m[0].length, score };
+            }
+            return best;
+        }
+        // Highlight every word in a piece of text that matches the query.
+        function kbHighlightAll(content, query) {
+            const nq = kbNorm((query || '').trim());
+            if (!nq) return escapeHtml(content);
+            const re = /[\p{L}\p{N}]+/gu;
+            let out = '', last = 0, m;
+            while ((m = re.exec(content)) !== null) {
+                const word = m[0], nw = kbNorm(word);
+                const hit = nw.includes(nq) || nq.includes(nw) || kbSim(nw, nq) >= KB_MATCH_MIN;
+                out += escapeHtml(content.slice(last, m.index));
+                out += hit ? '<mark>' + escapeHtml(word) + '</mark>' : escapeHtml(word);
+                last = m.index + word.length;
+            }
+            return out + escapeHtml(content.slice(last));
+        }
+        // Short snippet centered on the matched word, with matches highlighted.
+        function kbSnippetHtml(content, query) {
+            const best = kbBestMatch(content, query);
+            if (!best || best.score < KB_MATCH_MIN) {
+                const head = content.slice(0, 160);
+                return { html: escapeHtml(head) + (content.length > 160 ? ' …' : ''), matched: false };
+            }
+            const PAD = 70;
+            const start = Math.max(0, best.index - PAD);
+            const end = Math.min(content.length, best.index + best.length + PAD);
+            const html = (start > 0 ? '… ' : '') + kbHighlightAll(content.slice(start, end), query) + (end < content.length ? ' …' : '');
+            return { html, matched: true };
+        }
+        // Toggle a result between the snippet and the full highlighted text.
+        function kbTogglePreview(id) {
+            const el = document.getElementById('kbprev-' + id);
+            const c = (kbResults || []).find(x => x.id === id);
+            if (!el || !c) return;
+            const search = document.getElementById('kbSearch').value.trim();
+            if (el.dataset.full === '1') {
+                el.innerHTML = kbSnippetHtml(c.content, search).html;
+                el.dataset.full = '0';
+                el.classList.remove('expanded');
+            } else {
+                el.innerHTML = kbHighlightAll(c.content, search);
+                el.dataset.full = '1';
+                el.classList.add('expanded');
+            }
+        }
+
         function stripMarkdown(text) {
             if (!text) return '';
             text = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
@@ -337,6 +418,7 @@
 
         // ── Knowledge base ───────────────────────────────────────────────────────
         let kbPage = 0;
+        let kbResults = [];
         const KB_PAGE_SIZE = 50;
         let kbEditingId = null;
 
@@ -383,14 +465,15 @@
             tbody.innerHTML = '<tr><td colspan="5" class="loading"><span class="spinner"></span></td></tr>';
             try {
                 const { chunks, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}`);
+                kbResults = chunks;
                 document.getElementById('kbTotal').textContent = `Celkem: ${total} záznamů`;
                 if (!chunks.length) {
                     tbody.innerHTML = '<tr><td colspan="5" class="loading">Žádné záznamy</td></tr>';
                 } else {
-                    tbody.innerHTML = chunks.map(c => `<tr>
+                    tbody.innerHTML = chunks.map(c => { const snip = kbSnippetHtml(c.content, search); return `<tr>
   <td class="kb-content">
-    <div class="kb-preview" onclick="this.classList.toggle('expanded')">${escapeHtml(c.content)}</div>
-    <div class="kb-meta">ID: ${c.id}</div>
+    <div class="kb-preview" id="kbprev-${c.id}" onclick="kbTogglePreview(${c.id})">${snip.html}</div>
+    <div class="kb-meta">ID: ${c.id}${snip.matched ? '' : ' · <span class="kb-loose">⚠ volná shoda</span>'}</div>
   </td>
   <td>
     <div>${escapeHtml(c.document_title || '–')}</div>
@@ -405,7 +488,7 @@
     <button class="btn-ghost btn-sm" onclick="kbOpenHistory(${c.id})">Historie</button>
     <button class="btn-danger btn-sm" onclick="kbOpenDelete(${c.id})">Smazat</button>
   </td>
-</tr>`).join('');
+</tr>`; }).join('');
                 }
                 kbRenderPagination(total);
             } catch (e) {
