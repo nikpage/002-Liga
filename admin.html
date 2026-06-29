@@ -143,6 +143,12 @@
             <button class="btn-ghost" onclick="kbLoad()">Hledat</button>
             <span class="kb-total" id="kbTotal"></span>
         </div>
+        <div class="kb-filters" style="margin:8px 0 4px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+            <span style="color:#666;font-size:13px">Zdroje:</span>
+            <label style="font-size:14px;cursor:pointer"><input type="checkbox" class="kb-filter" value="poradna" checked onchange="kbOnFilterChange()"> Poradna</label>
+            <label style="font-size:14px;cursor:pointer"><input type="checkbox" class="kb-filter" value="web" checked onchange="kbOnFilterChange()"> Liga Web</label>
+            <label style="font-size:14px;cursor:pointer"><input type="checkbox" class="kb-filter" value="fb" checked onchange="kbOnFilterChange()"> Liga FB</label>
+        </div>
         <div class="table-wrap">
             <table class="kb-table">
                 <thead>
@@ -464,7 +470,8 @@
             }
             tbody.innerHTML = '<tr><td colspan="5" class="loading"><span class="spinner"></span></td></tr>';
             try {
-                const { chunks, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}`);
+                const filters = kbSelectedFilters().join(',');
+                const { chunks, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}&filters=${encodeURIComponent(filters)}`);
                 kbResults = chunks;
                 document.getElementById('kbTotal').textContent = `Celkem: ${total} záznamů`;
                 if (!chunks.length) {
@@ -508,6 +515,11 @@
         }
 
         function kbGoPage(p) { kbPage = p; kbLoad(); }
+
+        function kbSelectedFilters() {
+            return Array.from(document.querySelectorAll('.kb-filter:checked')).map(c => c.value);
+        }
+        function kbOnFilterChange() { kbPage = 0; kbLoad(); }
 
         function kbOpenCreate() {
             kbEditingId = null;

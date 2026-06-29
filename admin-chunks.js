@@ -41,13 +41,29 @@ async function getEmbeddingFor(id) {
     return data ? data.embedding : null;
 }
 
-exports.listChunks = async (search, offset = 0, limit = 50) => {
+// Source filter categories -> a PostgREST predicate. Poradna is identified by
+// audience; the others by source. All (or none) selected means no filtering.
+const FILTER_PREDICATES = {
+    poradna: 'audience.eq.poradna_internal',
+    web: 'source.eq.web',
+    fb: 'source.eq.facebook'
+};
+function buildOrFilter(filters) {
+    if (!Array.isArray(filters)) return null;
+    const keys = filters.filter(k => FILTER_PREDICATES[k]);
+    if (keys.length === 0 || keys.length === Object.keys(FILTER_PREDICATES).length) return null;
+    return keys.map(k => FILTER_PREDICATES[k]).join(',');
+}
+
+exports.listChunks = async (search, offset = 0, limit = 50, filters = []) => {
+    const orFilter = buildOrFilter(filters);
     if (search) {
         // Typo-tolerant fuzzy search via the pg_trgm-backed DB function.
-        const fuzzy = await supabase
+        let fq = supabase
             .rpc('search_chunks_fuzzy', { search_text: search }, { count: 'exact' })
-            .select(CHUNK_COLS)
-            .range(offset, offset + limit - 1);
+            .select(CHUNK_COLS);
+        if (orFilter) fq = fq.or(orFilter);
+        const fuzzy = await fq.range(offset, offset + limit - 1);
         if (!fuzzy.error) {
             return { chunks: fuzzy.data || [], total: fuzzy.count };
         }
@@ -56,9 +72,10 @@ exports.listChunks = async (search, offset = 0, limit = 50) => {
     let q = supabase
         .from(TABLE)
         .select(CHUNK_COLS, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+        .order('created_at', { ascending: false });
+    if (orFilter) q = q.or(orFilter);
     if (search) q = q.ilike('content', `%${search}%`);
+    q = q.range(offset, offset + limit - 1);
     const { data, error, count } = await q;
     if (error) throw error;
     return { chunks: data || [], total: count };

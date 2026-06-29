@@ -595,8 +595,9 @@ function adminError(res, e, action) {
 
 app.get('/api/admin/chunks', async (req, res) => {
     try {
-        const { search, offset, limit } = req.query;
-        const result = await adminChunks.listChunks(search, parseInt(offset) || 0, parseInt(limit) || 50);
+        const { search, offset, limit, filters } = req.query;
+        const filterArr = filters ? String(filters).split(',').filter(Boolean) : [];
+        const result = await adminChunks.listChunks(search, parseInt(offset) || 0, parseInt(limit) || 50, filterArr);
         res.json(result);
     } catch (e) { adminError(res, e, 'list'); }
 });
