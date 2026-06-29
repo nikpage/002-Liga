@@ -227,6 +227,20 @@
         </div>
     </div>
 
+    <!-- Replacement Choice Modal -->
+    <div class="overlay" id="kbReplaceOverlay">
+        <div class="modal">
+            <h2>Možná novější verze</h2>
+            <p id="kbReplaceMsg" style="margin:12px 0;color:#333"></p>
+            <p style="margin:12px 0;color:#777;font-size:13px">Obě volby lze vrátit zpět — záznamy se ukládají do historie.</p>
+            <div class="modal-footer">
+                <button class="btn-ghost" id="kbReplaceCancel">Zrušit</button>
+                <button class="btn-ghost" id="kbReplaceAdd">Přidat (ponechat obě)</button>
+                <button class="btn-danger" id="kbReplaceReplace">Nahradit</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Delete Confirm Modal -->
     <div class="overlay" id="kbDeleteOverlay">
         <div class="modal">
@@ -521,6 +535,26 @@
         }
         function kbOnFilterChange() { kbPage = 0; kbLoad(); }
 
+        // Show the "looks like a newer version" dialog. Resolves to
+        // 'add' | 'replace' | null (cancelled).
+        function kbAskReplace(candidate) {
+            return new Promise(resolve => {
+                const pct = Math.round((candidate.similarity || 0) * 100);
+                const name = candidate.document_title || candidate.source_url || 'dokument';
+                document.getElementById('kbReplaceMsg').innerHTML =
+                    'Tento záznam vypadá jako novější verze dokumentu:<br>' +
+                    `<strong>${escapeHtml(name)}</strong><br>` +
+                    (candidate.source_url ? `<span style="color:#777">${escapeHtml(candidate.source_url)}</span><br>` : '') +
+                    `Shoda obsahu: <strong>${pct} %</strong>.`;
+                const ov = document.getElementById('kbReplaceOverlay');
+                ov.classList.add('open');
+                const done = (val) => { ov.classList.remove('open'); resolve(val); };
+                document.getElementById('kbReplaceCancel').onclick = () => done(null);
+                document.getElementById('kbReplaceAdd').onclick = () => done('add');
+                document.getElementById('kbReplaceReplace').onclick = () => done('replace');
+            });
+        }
+
         function kbOpenCreate() {
             kbEditingId = null;
             document.getElementById('kbModalTitle').textContent = 'Nový záznam';
@@ -569,8 +603,19 @@
                     await kbApi('PUT', `/api/admin/chunks/${kbEditingId}`, body);
                     showToast('Záznam upraven.');
                 } else {
-                    const r = await kbApi('POST', '/api/admin/chunks', body);
-                    showToast(r && r.count > 1 ? `Záznam přidán (${r.count} částí).` : 'Záznam přidán.');
+                    // Before adding, check whether this looks like a newer version
+                    // of an existing document.
+                    let replaceUrl = null;
+                    const chk = await kbApi('POST', '/api/admin/chunks/check-replacement', { content, source_url: body.source_url });
+                    if (chk && chk.candidate) {
+                        const choice = await kbAskReplace(chk.candidate);
+                        if (choice === null) { btn.disabled = false; btn.textContent = 'Uložit'; return; }
+                        if (choice === 'replace') replaceUrl = chk.candidate.source_url;
+                    }
+                    const r = await kbApi('POST', '/api/admin/chunks', replaceUrl ? { ...body, replace_url: replaceUrl } : body);
+                    let msg = r && r.count > 1 ? `Záznam přidán (${r.count} částí).` : 'Záznam přidán.';
+                    if (replaceUrl) msg += ' Starší verze smazána (lze obnovit).';
+                    showToast(msg);
                 }
                 kbCloseModal('kbEditOverlay');
                 kbLoad();

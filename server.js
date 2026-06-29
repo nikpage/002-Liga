@@ -609,10 +609,19 @@ app.get('/api/admin/chunks/:id', async (req, res) => {
     } catch (e) { adminError(res, e, 'get'); }
 });
 
+app.post('/api/admin/chunks/check-replacement', async (req, res) => {
+    try {
+        const result = await adminChunks.findReplacementCandidate(req.body.content, req.body.source_url);
+        res.json(result);
+    } catch (e) { adminError(res, e, 'check-replacement'); }
+});
+
 app.post('/api/admin/chunks', async (req, res) => {
     try {
-        const chunk = await adminChunks.createChunk(req.body);
-        res.json(chunk);
+        const { replace_url, ...fields } = req.body;
+        const created = await adminChunks.createChunk(fields);
+        if (replace_url) await adminChunks.deleteDocument(replace_url);
+        res.json(created);
     } catch (e) { adminError(res, e, 'create'); }
 });
 

@@ -182,6 +182,66 @@ function normVal(field, v) {
     return v;
 }
 
+// Look for an existing document that this content appears to be a newer version
+// of: high embedding similarity, but a different URL. Returns the best candidate
+// above the threshold, or null. Fail-safe: if the DB function isn't installed,
+// returns no candidate so adding still works.
+const REPLACEMENT_MIN_SIMILARITY = 0.88;
+exports.findReplacementCandidate = async (content, sourceUrl) => {
+    const pieces = chunkText(content);
+    if (pieces.length === 0) return { candidate: null };
+    const probe = await getEmb(pieces[0]);
+    const { data, error } = await supabase.rpc('find_similar_chunks', {
+        probe,
+        exclude_url: sourceUrl || null,
+        match_count: 20
+    });
+    if (error || !data) return { candidate: null };
+
+    const probeBase = (sourceUrl || '').split('#')[0];
+    const byDoc = new Map();
+    for (const row of data) {
+        const base = (row.source_url || '').split('#')[0];
+        if (!base || (probeBase && base === probeBase)) continue;
+        const cur = byDoc.get(base);
+        if (!cur || row.similarity > cur.similarity) byDoc.set(base, { ...row, base });
+    }
+    let best = null;
+    for (const v of byDoc.values()) if (!best || v.similarity > best.similarity) best = v;
+    if (!best || best.similarity < REPLACEMENT_MIN_SIMILARITY) return { candidate: null };
+    return { candidate: {
+        source_url: best.base,
+        document_title: best.document_title || null,
+        audience: best.audience || null,
+        source: best.source || null,
+        similarity: best.similarity
+    } };
+};
+
+// Delete a whole document (every piece sharing this URL, including #anchored
+// chunks). Each piece is saved to history first, so the delete is recoverable.
+exports.deleteDocument = async (url) => {
+    if (!url) return { deleted: 0 };
+    const cols = 'id, content, document_title, source_url, source, audience, event_date, highlight_until';
+    const [exact, frag] = await Promise.all([
+        supabase.from(TABLE).select(cols).eq('source_url', url),
+        supabase.from(TABLE).select(cols).like('source_url', `${url}#%`)
+    ]);
+    const map = new Map();
+    for (const r of (exact.data || [])) map.set(r.id, r);
+    for (const r of (frag.data || [])) map.set(r.id, r);
+    const rows = [...map.values()];
+    for (const r of rows) {
+        const emb = await getEmbeddingFor(r.id);
+        await saveHistory({ ...r, embedding: emb }, 'delete');
+    }
+    if (rows.length) {
+        const { error } = await supabase.from(TABLE).delete().in('id', rows.map(r => r.id));
+        if (error) throw error;
+    }
+    return { deleted: rows.length };
+};
+
 exports.updateChunk = async (id, fields) => {
     const existing = await exports.getChunk(id);
     const changed = EDITABLE_FIELDS.some(f => f in fields && normVal(f, fields[f]) !== normVal(f, existing[f]));
