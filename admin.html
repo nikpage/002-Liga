@@ -179,40 +179,38 @@
                 <div class="kb-meta" id="kbLoadStatus" style="margin-top:4px"></div>
             </div>
             <div class="form-group">
-                <label>Obsah *</label>
+                <label>Text *</label>
                 <textarea id="kbFContent" placeholder="Text záznamu…"></textarea>
             </div>
             <div class="form-group">
-                <label>Nadpis dokumentu</label>
-                <input type="text" id="kbFTitle" placeholder="např. Služby – přeprava" />
+                <label>Název</label>
+                <input type="text" id="kbFTitle" placeholder="např. Příspěvek na péči" />
             </div>
             <div class="form-group">
-                <label>URL zdroje</label>
+                <label>Odkaz (URL)</label>
                 <input type="text" id="kbFUrl" placeholder="https://…" />
             </div>
             <div class="form-group">
-                <label>Zdroj (source)</label>
-                <select id="kbFSource">
-                    <option value="manual">manual</option>
-                    <option value="web">web</option>
-                    <option value="facebook">facebook</option>
-                    <option value="poradna">poradna</option>
+                <label>Kam to patří?</label>
+                <select id="kbFCategory" onchange="kbApplyCategory()">
+                    <option value="poradna">Poradna (interní)</option>
+                    <option value="web">Veřejný web</option>
                 </select>
             </div>
+            <input type="hidden" id="kbFSource" value="poradna" />
+            <input type="hidden" id="kbFAudience" value="poradna_internal" />
             <div class="form-group">
-                <label>Audience</label>
-                <select id="kbFAudience">
-                    <option value="public_web">public_web</option>
-                    <option value="poradna_internal">poradna_internal</option>
-                </select>
+                <label style="font-weight:normal;cursor:pointer"><input type="checkbox" id="kbFIsEvent" onchange="kbToggleEventFields()"> Toto je akce s datem</label>
             </div>
-            <div class="form-group">
-                <label>Datum události (event_date)</label>
-                <input type="date" id="kbFEventDate" />
-            </div>
-            <div class="form-group">
-                <label>Zvýraznit do (highlight_until)</label>
-                <input type="date" id="kbFHighlightUntil" />
+            <div id="kbEventFields" style="display:none">
+                <div class="form-group">
+                    <label>Datum akce</label>
+                    <input type="date" id="kbFEventDate" />
+                </div>
+                <div class="form-group">
+                    <label>Zobrazovat do</label>
+                    <input type="date" id="kbFHighlightUntil" />
+                </div>
             </div>
             <div class="modal-error" id="kbModalError"></div>
             <div class="modal-footer">
@@ -613,12 +611,29 @@
             });
         }
 
+        // "Kam to patří?" drives the underlying source/audience values.
+        function kbApplyCategory() {
+            const cat = document.getElementById('kbFCategory').value;
+            if (cat === 'poradna') {
+                document.getElementById('kbFSource').value = 'poradna';
+                document.getElementById('kbFAudience').value = 'poradna_internal';
+            } else {
+                document.getElementById('kbFSource').value = 'web';
+                document.getElementById('kbFAudience').value = 'public_web';
+            }
+        }
+        function kbToggleEventFields() {
+            document.getElementById('kbEventFields').style.display = document.getElementById('kbFIsEvent').checked ? '' : 'none';
+        }
+
         function kbOpenCreate() {
             kbEditingId = null;
             document.getElementById('kbModalTitle').textContent = 'Nový záznam';
             ['kbFContent','kbFTitle','kbFUrl','kbFEventDate','kbFHighlightUntil','kbFLoadUrl'].forEach(id => document.getElementById(id).value = '');
-            document.getElementById('kbFSource').value = 'manual';
-            document.getElementById('kbFAudience').value = 'public_web';
+            document.getElementById('kbFCategory').value = 'poradna';
+            kbApplyCategory();
+            document.getElementById('kbFIsEvent').checked = false;
+            kbToggleEventFields();
             document.getElementById('kbModalError').textContent = '';
             document.getElementById('kbLoadStatus').textContent = '';
             document.getElementById('kbLoadRow').style.display = '';
@@ -658,10 +673,13 @@
                 document.getElementById('kbFContent').value = c.content || '';
                 document.getElementById('kbFTitle').value = c.document_title || '';
                 document.getElementById('kbFUrl').value = c.source_url || '';
-                document.getElementById('kbFSource').value = c.source || 'manual';
+                document.getElementById('kbFSource').value = c.source || 'web';
                 document.getElementById('kbFAudience').value = c.audience || 'public_web';
+                document.getElementById('kbFCategory').value = (c.audience === 'poradna_internal') ? 'poradna' : 'web';
                 document.getElementById('kbFEventDate').value = c.event_date ? c.event_date.split('T')[0] : '';
                 document.getElementById('kbFHighlightUntil').value = c.highlight_until ? c.highlight_until.split('T')[0] : '';
+                document.getElementById('kbFIsEvent').checked = !!(c.event_date || c.highlight_until);
+                kbToggleEventFields();
             } catch (e) {
                 document.getElementById('kbModalError').textContent = e.message;
             }
@@ -669,17 +687,18 @@
 
         async function kbSave() {
             const content = document.getElementById('kbFContent').value.trim();
-            if (!content) { document.getElementById('kbModalError').textContent = 'Obsah je povinný.'; return; }
+            if (!content) { document.getElementById('kbModalError').textContent = 'Text je povinný.'; return; }
             const btn = document.getElementById('kbSaveBtn');
             btn.disabled = true; btn.textContent = 'Ukládám…';
+            const isEvent = document.getElementById('kbFIsEvent').checked;
             const body = {
                 content,
                 document_title: document.getElementById('kbFTitle').value.trim() || null,
                 source_url: document.getElementById('kbFUrl').value.trim() || null,
                 source: document.getElementById('kbFSource').value,
                 audience: document.getElementById('kbFAudience').value,
-                event_date: document.getElementById('kbFEventDate').value || null,
-                highlight_until: document.getElementById('kbFHighlightUntil').value || null,
+                event_date: isEvent ? (document.getElementById('kbFEventDate').value || null) : null,
+                highlight_until: isEvent ? (document.getElementById('kbFHighlightUntil').value || null) : null,
             };
             try {
                 if (kbEditingId) {
