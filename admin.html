@@ -180,6 +180,8 @@
             </div>
             <input type="hidden" id="kbFSource" value="poradna" />
             <input type="hidden" id="kbFAudience" value="poradna_internal" />
+            <input type="hidden" id="kbFEventDate" value="" />
+            <input type="hidden" id="kbFHighlightUntil" value="" />
             <div id="kbManualFields">
                 <div class="form-group">
                     <label>Text *</label>
@@ -192,26 +194,6 @@
                 <div class="form-group">
                     <label>Odkaz (URL)</label>
                     <input type="text" id="kbFUrl" placeholder="https://…" />
-                </div>
-                <div class="form-group">
-                    <label>Kam to patří?</label>
-                    <select id="kbFCategory" onchange="kbApplyCategory()">
-                        <option value="poradna">Poradna (interní)</option>
-                        <option value="web">Veřejný web</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label style="font-weight:normal;cursor:pointer"><input type="checkbox" id="kbFIsEvent" onchange="kbToggleEventFields()"> Toto je akce s datem</label>
-                </div>
-                <div id="kbEventFields" style="display:none">
-                    <div class="form-group">
-                        <label>Datum akce</label>
-                        <input type="date" id="kbFEventDate" />
-                    </div>
-                    <div class="form-group">
-                        <label>Zobrazovat do</label>
-                        <input type="date" id="kbFHighlightUntil" />
-                    </div>
                 </div>
             </div>
             <div class="modal-error" id="kbModalError"></div>
@@ -613,21 +595,6 @@
             });
         }
 
-        // "Kam to patří?" drives the underlying source/audience values.
-        function kbApplyCategory() {
-            const cat = document.getElementById('kbFCategory').value;
-            if (cat === 'poradna') {
-                document.getElementById('kbFSource').value = 'poradna';
-                document.getElementById('kbFAudience').value = 'poradna_internal';
-            } else {
-                document.getElementById('kbFSource').value = 'web';
-                document.getElementById('kbFAudience').value = 'public_web';
-            }
-        }
-        function kbToggleEventFields() {
-            document.getElementById('kbEventFields').style.display = document.getElementById('kbFIsEvent').checked ? '' : 'none';
-        }
-
         function kbOpenCreate() {
             kbEditingId = null;
             document.getElementById('kbModalTitle').textContent = 'Přidat z odkazu';
@@ -635,8 +602,6 @@
             // URL-fetched pages go in as public web content.
             document.getElementById('kbFSource').value = 'web';
             document.getElementById('kbFAudience').value = 'public_web';
-            document.getElementById('kbFIsEvent').checked = false;
-            kbToggleEventFields();
             document.getElementById('kbModalError').textContent = '';
             document.getElementById('kbLoadStatus').textContent = '';
             // URL is the only input: show the URL row, hide everything else.
@@ -684,11 +649,8 @@
                 document.getElementById('kbFUrl').value = c.source_url || '';
                 document.getElementById('kbFSource').value = c.source || 'web';
                 document.getElementById('kbFAudience').value = c.audience || 'public_web';
-                document.getElementById('kbFCategory').value = (c.audience === 'poradna_internal') ? 'poradna' : 'web';
                 document.getElementById('kbFEventDate').value = c.event_date ? c.event_date.split('T')[0] : '';
                 document.getElementById('kbFHighlightUntil').value = c.highlight_until ? c.highlight_until.split('T')[0] : '';
-                document.getElementById('kbFIsEvent').checked = !!(c.event_date || c.highlight_until);
-                kbToggleEventFields();
             } catch (e) {
                 document.getElementById('kbModalError').textContent = e.message;
             }
@@ -704,15 +666,14 @@
             if (!content) { document.getElementById('kbModalError').textContent = 'Text je povinný.'; return; }
             const btn = document.getElementById('kbSaveBtn');
             btn.disabled = true; btn.textContent = 'Ukládám…';
-            const isEvent = document.getElementById('kbFIsEvent').checked;
             const body = {
                 content,
                 document_title: document.getElementById('kbFTitle').value.trim() || null,
                 source_url: document.getElementById('kbFUrl').value.trim() || null,
                 source: document.getElementById('kbFSource').value,
                 audience: document.getElementById('kbFAudience').value,
-                event_date: isEvent ? (document.getElementById('kbFEventDate').value || null) : null,
-                highlight_until: isEvent ? (document.getElementById('kbFHighlightUntil').value || null) : null,
+                event_date: document.getElementById('kbFEventDate').value || null,
+                highlight_until: document.getElementById('kbFHighlightUntil').value || null,
             };
             try {
                 await kbApi('PUT', `/api/admin/chunks/${kbEditingId}`, body);
