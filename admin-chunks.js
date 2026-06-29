@@ -190,6 +190,9 @@ function chunkText(text) {
     return chunks;
 }
 
+// How many pieces a given text will be split into (for the add-from-URL preview).
+exports.countChunks = (text) => chunkText(text).length;
+
 exports.createChunk = async ({ content, document_title, source_url, source, audience, event_date, highlight_until }) => {
     const pieces = chunkText(content);
     if (pieces.length === 0) throw new Error('Obsah je prázdný.');

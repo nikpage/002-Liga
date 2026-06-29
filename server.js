@@ -13,6 +13,7 @@ const { getTTS } = require('./ai-client');
 const { getQALogs, getAudienceCounts } = require('./database');
 const { login: ewayLogin, callMethod: ewayCall, getLastLog: ewayGetLastLog } = require('./eway-crm');
 const adminChunks = require('./admin-chunks');
+const { extractFromUrl } = require('./fetch-extract');
 
 const app = express();
 app.use(cors());
@@ -607,6 +608,17 @@ app.get('/api/admin/chunks/:id', async (req, res) => {
         const chunk = await adminChunks.getChunk(req.params.id);
         res.json(chunk);
     } catch (e) { adminError(res, e, 'get'); }
+});
+
+app.post('/api/admin/fetch-url', async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) throw new Error('Chybí URL.');
+        const { title, text, videoText } = await extractFromUrl(url);
+        const combined = videoText ? `${text}\n\n[Přepis videa]\n${videoText}` : text;
+        if (!combined.trim()) throw new Error('Na stránce se nepodařilo najít žádný text.');
+        res.json({ title, text: combined, chunkCount: adminChunks.countChunks(combined), hasVideo: !!videoText });
+    } catch (e) { adminError(res, e, 'fetch-url'); }
 });
 
 app.post('/api/admin/documents/delete', async (req, res) => {

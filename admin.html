@@ -170,6 +170,14 @@
     <div class="overlay" id="kbEditOverlay">
         <div class="modal">
             <h2 id="kbModalTitle">Nový záznam</h2>
+            <div class="form-group" id="kbLoadRow">
+                <label>Načíst z odkazu (URL)</label>
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="kbFLoadUrl" placeholder="https://… (článek, stránka s videem)" style="flex:1" />
+                    <button class="btn-ghost" id="kbLoadBtn" onclick="kbFetchUrl()">Načíst</button>
+                </div>
+                <div class="kb-meta" id="kbLoadStatus" style="margin-top:4px"></div>
+            </div>
             <div class="form-group">
                 <label>Obsah *</label>
                 <textarea id="kbFContent" placeholder="Text záznamu…"></textarea>
@@ -608,17 +616,42 @@
         function kbOpenCreate() {
             kbEditingId = null;
             document.getElementById('kbModalTitle').textContent = 'Nový záznam';
-            ['kbFContent','kbFTitle','kbFUrl','kbFEventDate','kbFHighlightUntil'].forEach(id => document.getElementById(id).value = '');
+            ['kbFContent','kbFTitle','kbFUrl','kbFEventDate','kbFHighlightUntil','kbFLoadUrl'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('kbFSource').value = 'manual';
             document.getElementById('kbFAudience').value = 'public_web';
             document.getElementById('kbModalError').textContent = '';
+            document.getElementById('kbLoadStatus').textContent = '';
+            document.getElementById('kbLoadRow').style.display = '';
             document.getElementById('kbEditOverlay').classList.add('open');
+        }
+
+        // Fetch a page by URL, strip chrome, pull video captions, and fill the form.
+        async function kbFetchUrl() {
+            const url = document.getElementById('kbFLoadUrl').value.trim();
+            const status = document.getElementById('kbLoadStatus');
+            if (!url) { status.textContent = 'Zadejte URL.'; return; }
+            const btn = document.getElementById('kbLoadBtn');
+            btn.disabled = true; btn.textContent = 'Načítám…';
+            status.textContent = 'Načítám stránku…';
+            try {
+                const r = await kbApi('POST', '/api/admin/fetch-url', { url });
+                document.getElementById('kbFContent').value = r.text || '';
+                if (!document.getElementById('kbFTitle').value.trim()) document.getElementById('kbFTitle').value = r.title || '';
+                document.getElementById('kbFUrl').value = url;
+                status.textContent = `Načteno${r.title ? ` „${r.title}"` : ''} — rozděleno na ${r.chunkCount} ${r.chunkCount === 1 ? 'část' : 'částí'}${r.hasVideo ? ' (včetně přepisu videa)' : ''}. Zkontrolujte text a uložte.`;
+            } catch (e) {
+                status.textContent = e.message;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Načíst';
+            }
         }
 
         async function kbOpenEdit(id) {
             kbEditingId = id;
             document.getElementById('kbModalTitle').textContent = 'Upravit záznam';
             document.getElementById('kbModalError').textContent = '';
+            document.getElementById('kbLoadStatus').textContent = '';
+            document.getElementById('kbLoadRow').style.display = 'none';
             document.getElementById('kbEditOverlay').classList.add('open');
             try {
                 const c = await kbApi('GET', `/api/admin/chunks/${id}`);
@@ -662,6 +695,7 @@
                         if (choice === null) { btn.disabled = false; btn.textContent = 'Uložit'; return; }
                         if (choice === 'replace') replaceUrl = chk.candidate.source_url;
                     }
+                    document.getElementById('kbLoadStatus').textContent = 'Rozděluji na části a vytvářím embeddingy…';
                     const r = await kbApi('POST', '/api/admin/chunks', replaceUrl ? { ...body, replace_url: replaceUrl } : body);
                     let msg = r && r.count > 1 ? `Záznam přidán (${r.count} částí).` : 'Záznam přidán.';
                     if (replaceUrl) msg += ' Starší verze smazána (lze obnovit).';
