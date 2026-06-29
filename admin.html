@@ -3,12 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Q&A Log - Admin</title>
+    <title>Admin</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        /* Tabs */
+        .tab-bar { display: flex; gap: 0; background: #1a1a2e; padding: 0 20px; }
+        .tab-btn { padding: 14px 24px; background: none; border: none; border-bottom: 3px solid transparent; color: #aaa; font-size: 0.95em; font-weight: 500; cursor: pointer; border-radius: 0; }
+        .tab-btn:hover { color: #fff; }
+        .tab-btn.active { color: #fff; border-bottom-color: #fff; }
+        .tab-panel { display: none; padding: 20px; }
+        .tab-panel.active { display: block; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
         h1 { font-size: 1.4em; }
         .stats { color: #666; font-size: 0.9em; }
@@ -41,8 +48,7 @@
         .loading { text-align: center; padding: 40px; color: #999; }
         .error { text-align: center; padding: 40px; color: #cc0000; }
 
-        /* --- Knowledge base section --- */
-        .section-divider { margin: 40px 0 24px; border-top: 2px solid #ddd; padding-top: 24px; }
+        /* --- Knowledge base tab --- */
         .kb-toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
         .kb-toolbar input[type=text] { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9em; }
         .btn-add { background: #1a1a2e; color: white; }
@@ -90,43 +96,49 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1>Q&A Log</h1>
-            <span class="stats" id="stats"></span>
-        </div>
-        <div class="actions">
-            <button class="btn-refresh" id="refreshBtn" onclick="loadLogs()">Obnovit</button>
-            <button class="btn-export" id="exportBtn" onclick="exportExcel()" disabled>Exportovat do Excelu</button>
-        </div>
-    </div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Datum</th>
-                    <th>Otazka</th>
-                    <th>Odpoved</th>
-                </tr>
-            </thead>
-            <tbody id="tbody">
-                <tr><td colspan="4" class="loading">Nacitam...</td></tr>
-            </tbody>
-        </table>
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('qa')">Q&amp;A Log</button>
+        <button class="tab-btn" onclick="switchTab('kb')">Znalostní báze</button>
     </div>
 
-    <!-- Knowledge base section -->
-    <div class="section-divider">
-        <div class="header" style="margin-bottom:14px">
+    <!-- Q&A Log tab -->
+    <div class="tab-panel active" id="tab-qa">
+        <div class="header">
             <div>
-                <h1>Znalostní báze</h1>
+                <h1>Q&A Log</h1>
+                <span class="stats" id="stats"></span>
+            </div>
+            <div class="actions">
+                <button class="btn-refresh" id="refreshBtn" onclick="loadLogs()">Obnovit</button>
+                <button class="btn-export" id="exportBtn" onclick="exportExcel()" disabled>Exportovat do Excelu</button>
             </div>
         </div>
-        <div class="kb-toolbar">
-            <input type="text" id="kbSearch" placeholder="Hledat v obsahu…" />
-            <button class="btn-ghost" onclick="kbLoad()">Hledat</button>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Datum</th>
+                        <th>Otazka</th>
+                        <th>Odpoved</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody">
+                    <tr><td colspan="4" class="loading">Nacitam...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Knowledge base tab -->
+    <div class="tab-panel" id="tab-kb">
+        <div class="header" style="margin-bottom:14px">
+            <div><h1>Znalostní báze</h1></div>
             <button class="btn-add" onclick="kbOpenCreate()">+ Nový záznam</button>
+        </div>
+        <div class="kb-toolbar">
+            <input type="text" id="kbSearch" placeholder="Hledat v obsahu… (min. 2 znaky)" />
+            <button class="btn-ghost" onclick="kbLoad()">Hledat</button>
             <span class="kb-total" id="kbTotal"></span>
         </div>
         <div class="table-wrap">
@@ -141,12 +153,12 @@
                     </tr>
                 </thead>
                 <tbody id="kbTbody">
-                    <tr><td colspan="5" class="loading">Načítám…</td></tr>
+                    <tr><td colspan="5" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>
                 </tbody>
             </table>
         </div>
         <div class="kb-pagination" id="kbPagination"></div>
-    </div>
+    </div><!-- end tab-kb -->
 
     <!-- Edit / Create Modal -->
     <div class="overlay" id="kbEditOverlay">
@@ -315,6 +327,14 @@
 
         loadLogs();
 
+        // ── Tabs ─────────────────────────────────────────────────────────────────
+        function switchTab(name) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
+        }
+
         // ── Knowledge base ───────────────────────────────────────────────────────
         let kbPage = 0;
         const KB_PAGE_SIZE = 50;
@@ -351,6 +371,12 @@
         async function kbLoad() {
             const search = document.getElementById('kbSearch').value.trim();
             const tbody = document.getElementById('kbTbody');
+            if (search.length < 2) {
+                tbody.innerHTML = '<tr><td colspan="5" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>';
+                document.getElementById('kbTotal').textContent = '';
+                document.getElementById('kbPagination').innerHTML = '';
+                return;
+            }
             tbody.innerHTML = '<tr><td colspan="5" class="loading"><span class="spinner"></span></td></tr>';
             try {
                 const { chunks, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}`);
@@ -508,8 +534,6 @@
 
         document.getElementById('kbSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { kbPage = 0; kbLoad(); } });
         document.querySelectorAll('.overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) kbCloseModal(el.id); }));
-
-        kbLoad();
     </script>
 </body>
 </html>
