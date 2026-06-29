@@ -74,15 +74,84 @@ exports.getChunk = async (id) => {
     return data;
 };
 
+// Same sizes as the website ingestion (scripts/ingest-facebook.js / ingest-public.js)
+// so a manually-added document is chunked consistently with crawled content.
+const TARGET_CHUNK_SIZE = 800;
+const OVERLAP_SIZE = 100;
+
+// Break an over-long block into <=max word-bounded pieces.
+function splitLong(s, max) {
+    const out = [];
+    while (s.length > max) {
+        let cut = s.lastIndexOf(' ', max);
+        if (cut <= 0) cut = max;
+        out.push(s.slice(0, cut).trim());
+        s = s.slice(cut).trim();
+    }
+    if (s) out.push(s);
+    return out;
+}
+
+// Split plain text into ~800-char chunks at paragraph/word boundaries, carrying
+// ~100 chars of overlap between them (mirrors chunkBlocks in ingest-public.js).
+function chunkText(text) {
+    const clean = (text || '').replace(/\r\n/g, '\n').trim();
+    if (!clean) return [];
+    if (clean.length <= TARGET_CHUNK_SIZE) return [clean];
+
+    const blocks = [];
+    for (const b of clean.split(/\n+/).map(x => x.trim()).filter(Boolean)) {
+        if (b.length > TARGET_CHUNK_SIZE) blocks.push(...splitLong(b, TARGET_CHUNK_SIZE));
+        else blocks.push(b);
+    }
+
+    const chunks = [];
+    let buffer = '';
+    const flush = () => {
+        const c = buffer.trim();
+        if (!c) return;
+        chunks.push(c);
+        if (c.length > OVERLAP_SIZE) {
+            const tail = c.slice(-OVERLAP_SIZE);
+            const at = tail.search(/\s/);
+            buffer = (at >= 0 ? tail.slice(at + 1) : tail) + ' ';
+        } else {
+            buffer = '';
+        }
+    };
+    for (const b of blocks) {
+        const piece = b + '\n';
+        if (buffer.length + piece.length > TARGET_CHUNK_SIZE && buffer.trim()) flush();
+        buffer += piece;
+    }
+    flush();
+    return chunks;
+}
+
 exports.createChunk = async ({ content, document_title, source_url, source, audience, event_date, highlight_until }) => {
-    const embedding = await getEmb(content);
+    const pieces = chunkText(content);
+    if (pieces.length === 0) throw new Error('Obsah je prázdný.');
+    const base = {
+        document_title: document_title || null,
+        source_url: source_url || null,
+        source: source || 'manual',
+        audience: audience || 'public_web',
+        event_date: event_date || null,
+        highlight_until: highlight_until || null
+    };
+    // Embed every piece first; if any embedding fails we insert nothing, so a
+    // document is never saved half-embedded.
+    const rows = [];
+    for (const piece of pieces) {
+        const embedding = await getEmb(piece);
+        rows.push({ content: piece, ...base, embedding });
+    }
     const { data, error } = await supabase
         .from(TABLE)
-        .insert({ content, document_title, source_url, source: source || 'manual', audience: audience || 'public_web', event_date: event_date || null, highlight_until: highlight_until || null, embedding })
-        .select('id, content, document_title, source_url, source, audience, event_date, highlight_until, created_at')
-        .single();
+        .insert(rows)
+        .select('id, content, document_title, source_url, source, audience, event_date, highlight_until, created_at');
     if (error) throw error;
-    return data;
+    return { count: data.length, chunks: data };
 };
 
 const EDITABLE_FIELDS = ['content', 'document_title', 'source_url', 'source', 'audience', 'event_date', 'highlight_until'];

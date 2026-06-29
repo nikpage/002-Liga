@@ -557,8 +557,8 @@
                     await kbApi('PUT', `/api/admin/chunks/${kbEditingId}`, body);
                     showToast('Záznam upraven.');
                 } else {
-                    await kbApi('POST', '/api/admin/chunks', body);
-                    showToast('Záznam přidán.');
+                    const r = await kbApi('POST', '/api/admin/chunks', body);
+                    showToast(r && r.count > 1 ? `Záznam přidán (${r.count} částí).` : 'Záznam přidán.');
                 }
                 kbCloseModal('kbEditOverlay');
                 kbLoad();
