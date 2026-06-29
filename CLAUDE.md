@@ -1,5 +1,8 @@
 # CLAUDE.md - Project Context
 
+## Interaction Style
+- **Never use the AskUserQuestion tool.** Ask clarifying questions directly in plain text.
+
 ## Commands
 - **Start Server:** `npm start` or `node server.js`
 - **Install Dependencies:** `npm install`
