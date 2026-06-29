@@ -573,54 +573,74 @@ app.post('/tts', async (req, res) => {
 });
 
 // --- Admin Chunks API ---
+// Turn any backend error into a plain-Czech message a non-technical user can
+// act on, plus a short reference code. The full technical error is logged
+// server-side under that code so Nik can trace it.
+function adminError(res, e, action) {
+    const ref = (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).slice(-6).toUpperCase();
+    console.error(`[ADMIN ${action} ERR ${ref}]`, e && e.stack ? e.stack : e);
+    const msg = ((e && e.message) || '').toLowerCase();
+    let userMsg;
+    if (msg.includes('quota') || msg.includes('429') || msg.includes('resource_exhausted') || msg.includes('rate limit')) {
+        userMsg = 'Služba je momentálně přetížená. Zkuste to prosím za minutu znovu.';
+    } else if (msg.includes('google') || msg.includes('embedding') || msg.includes('fetch') || msg.includes('network') ||
+               msg.includes('timeout') || msg.includes('econn') || msg.includes('socket') ||
+               msg.includes('503') || msg.includes('502') || msg.includes('500') || msg.includes('dimension')) {
+        userMsg = 'Služba AI je dočasně nedostupná. Zkuste to prosím za chvíli znovu.';
+    } else {
+        userMsg = 'Došlo k technické chybě. Kontaktujte prosím Nika a uveďte kód níže.';
+    }
+    res.status(500).json({ error: userMsg, ref });
+}
+
 app.get('/api/admin/chunks', async (req, res) => {
     try {
         const { search, offset, limit } = req.query;
         const result = await adminChunks.listChunks(search, parseInt(offset) || 0, parseInt(limit) || 50);
         res.json(result);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'list'); }
 });
 
 app.get('/api/admin/chunks/:id', async (req, res) => {
     try {
         const chunk = await adminChunks.getChunk(req.params.id);
         res.json(chunk);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'get'); }
 });
 
 app.post('/api/admin/chunks', async (req, res) => {
     try {
         const chunk = await adminChunks.createChunk(req.body);
         res.json(chunk);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'create'); }
 });
 
 app.put('/api/admin/chunks/:id', async (req, res) => {
     try {
         const chunk = await adminChunks.updateChunk(req.params.id, req.body);
         res.json(chunk);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'update'); }
 });
 
 app.delete('/api/admin/chunks/:id', async (req, res) => {
     try {
         await adminChunks.deleteChunk(req.params.id);
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'delete'); }
 });
 
 app.get('/api/admin/chunks/:id/history', async (req, res) => {
     try {
         const history = await adminChunks.getHistory(req.params.id);
         res.json(history);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'history'); }
 });
 
 app.post('/api/admin/chunks/:id/restore/:historyId', async (req, res) => {
     try {
         const chunk = await adminChunks.restoreChunk(req.params.id, req.params.historyId);
         res.json(chunk);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { adminError(res, e, 'restore'); }
 });
 
 const port = process.env.PORT || 3000;

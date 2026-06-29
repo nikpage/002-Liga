@@ -77,8 +77,22 @@ exports.createChunk = async ({ content, document_title, source_url, source, audi
     return data;
 };
 
+const EDITABLE_FIELDS = ['content', 'document_title', 'source_url', 'source', 'audience', 'event_date', 'highlight_until'];
+
+// Normalize a field value for change-detection. Empty -> null; date fields
+// compared by calendar day so a stored timestamp vs. a 'YYYY-MM-DD' input
+// doesn't register as a phantom change.
+function normVal(field, v) {
+    if (v === undefined || v === null || v === '') return null;
+    if (field === 'event_date' || field === 'highlight_until') return String(v).split('T')[0];
+    return v;
+}
+
 exports.updateChunk = async (id, fields) => {
     const existing = await exports.getChunk(id);
+    const changed = EDITABLE_FIELDS.some(f => f in fields && normVal(f, fields[f]) !== normVal(f, existing[f]));
+    // Nothing actually changed -> don't write an identical history version.
+    if (!changed) return existing;
     await saveHistory(existing, 'edit');
     const update = { ...fields };
     if (fields.content && fields.content !== existing.content) {
