@@ -31,10 +31,23 @@ async function saveHistory(chunk, action) {
     }
 }
 
+const CHUNK_COLS = 'id, content, document_title, source_url, source, audience, event_date, highlight_until, created_at';
+
 exports.listChunks = async (search, offset = 0, limit = 50) => {
+    if (search) {
+        // Typo-tolerant fuzzy search via the pg_trgm-backed DB function.
+        const fuzzy = await supabase
+            .rpc('search_chunks_fuzzy', { search_text: search }, { count: 'exact' })
+            .select(CHUNK_COLS)
+            .range(offset, offset + limit - 1);
+        if (!fuzzy.error) {
+            return { chunks: fuzzy.data || [], total: fuzzy.count };
+        }
+        // Fallback: function not installed yet -> keep exact search working.
+    }
     let q = supabase
         .from(TABLE)
-        .select('id, content, document_title, source_url, source, audience, event_date, highlight_until, created_at', { count: 'exact' })
+        .select(CHUNK_COLS, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
     if (search) q = q.ilike('content', `%${search}%`);
