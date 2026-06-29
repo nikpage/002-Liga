@@ -577,7 +577,7 @@ app.post('/tts', async (req, res) => {
 // Turn any backend error into a plain-Czech message a non-technical user can
 // act on, plus a short reference code. The full technical error is logged
 // server-side under that code so Nik can trace it.
-function adminError(res, e, action) {
+function adminErrorInfo(e, action) {
     const ref = (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).slice(-6).toUpperCase();
     console.error(`[ADMIN ${action} ERR ${ref}]`, e && e.stack ? e.stack : e);
     const msg = ((e && e.message) || '').toLowerCase();
@@ -591,6 +591,11 @@ function adminError(res, e, action) {
     } else {
         userMsg = 'Došlo k technické chybě. Kontaktujte prosím Nika a uveďte kód níže.';
     }
+    return { userMsg, ref };
+}
+
+function adminError(res, e, action) {
+    const { userMsg, ref } = adminErrorInfo(e, action);
     res.status(500).json({ error: userMsg, ref });
 }
 
@@ -642,6 +647,34 @@ app.post('/api/admin/chunks', async (req, res) => {
         if (replace_url) await adminChunks.deleteDocument(replace_url);
         res.json(created);
     } catch (e) { adminError(res, e, 'create'); }
+});
+
+// Streaming create: same as POST /api/admin/chunks but emits live progress
+// (chunking + per-piece embedding) over Server-Sent Events so the modal can
+// show a real progress counter. X-Accel-Buffering:no keeps proxies (Railway)
+// from buffering the stream.
+app.post('/api/admin/chunks/stream', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    });
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    try {
+        const { replace_url, ...fields } = req.body;
+        const created = await adminChunks.createChunk(fields, (p) => send(p));
+        if (replace_url) {
+            send({ phase: 'replacing' });
+            await adminChunks.deleteDocument(replace_url);
+        }
+        send({ phase: 'done', count: created.count, replaced: !!replace_url });
+    } catch (e) {
+        const { userMsg, ref } = adminErrorInfo(e, 'create-stream');
+        send({ phase: 'error', error: userMsg, ref });
+    } finally {
+        res.end();
+    }
 });
 
 app.put('/api/admin/chunks/:id', async (req, res) => {

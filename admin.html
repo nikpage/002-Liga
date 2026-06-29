@@ -178,38 +178,40 @@
                 </div>
                 <div class="kb-meta" id="kbLoadStatus" style="margin-top:4px"></div>
             </div>
-            <div class="form-group">
-                <label>Text *</label>
-                <textarea id="kbFContent" placeholder="Text záznamu…"></textarea>
-            </div>
-            <div class="form-group">
-                <label>Název</label>
-                <input type="text" id="kbFTitle" placeholder="např. Příspěvek na péči" />
-            </div>
-            <div class="form-group">
-                <label>Odkaz (URL)</label>
-                <input type="text" id="kbFUrl" placeholder="https://…" />
-            </div>
-            <div class="form-group">
-                <label>Kam to patří?</label>
-                <select id="kbFCategory" onchange="kbApplyCategory()">
-                    <option value="poradna">Poradna (interní)</option>
-                    <option value="web">Veřejný web</option>
-                </select>
-            </div>
             <input type="hidden" id="kbFSource" value="poradna" />
             <input type="hidden" id="kbFAudience" value="poradna_internal" />
-            <div class="form-group">
-                <label style="font-weight:normal;cursor:pointer"><input type="checkbox" id="kbFIsEvent" onchange="kbToggleEventFields()"> Toto je akce s datem</label>
-            </div>
-            <div id="kbEventFields" style="display:none">
+            <div id="kbManualFields">
                 <div class="form-group">
-                    <label>Datum akce</label>
-                    <input type="date" id="kbFEventDate" />
+                    <label>Text *</label>
+                    <textarea id="kbFContent" placeholder="Text záznamu…"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Zobrazovat do</label>
-                    <input type="date" id="kbFHighlightUntil" />
+                    <label>Název</label>
+                    <input type="text" id="kbFTitle" placeholder="např. Příspěvek na péči" />
+                </div>
+                <div class="form-group">
+                    <label>Odkaz (URL)</label>
+                    <input type="text" id="kbFUrl" placeholder="https://…" />
+                </div>
+                <div class="form-group">
+                    <label>Kam to patří?</label>
+                    <select id="kbFCategory" onchange="kbApplyCategory()">
+                        <option value="poradna">Poradna (interní)</option>
+                        <option value="web">Veřejný web</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="font-weight:normal;cursor:pointer"><input type="checkbox" id="kbFIsEvent" onchange="kbToggleEventFields()"> Toto je akce s datem</label>
+                </div>
+                <div id="kbEventFields" style="display:none">
+                    <div class="form-group">
+                        <label>Datum akce</label>
+                        <input type="date" id="kbFEventDate" />
+                    </div>
+                    <div class="form-group">
+                        <label>Zobrazovat do</label>
+                        <input type="date" id="kbFHighlightUntil" />
+                    </div>
                 </div>
             </div>
             <div class="modal-error" id="kbModalError"></div>
@@ -236,11 +238,11 @@
         <div class="modal">
             <h2>Možná novější verze</h2>
             <p id="kbReplaceMsg" style="margin:12px 0;color:#333"></p>
-            <p style="margin:12px 0;color:#777;font-size:13px">Obě volby lze vrátit zpět — záznamy se ukládají do historie.</p>
+            <p style="margin:12px 0;color:#777;font-size:13px">Obě volby jsou 100% vratné — vše se ukládá do historie a lze kdykoli obnovit.</p>
             <div class="modal-footer">
                 <button class="btn-ghost" id="kbReplaceCancel">Zrušit</button>
-                <button class="btn-ghost" id="kbReplaceAdd">Přidat (ponechat obě)</button>
-                <button class="btn-danger" id="kbReplaceReplace">Nahradit</button>
+                <button class="btn-ghost" id="kbReplaceAdd">Přidat jako nový (ponechat oba)</button>
+                <button class="btn-danger" id="kbReplaceReplace">Nahradit starší verzi</button>
             </div>
         </div>
     </div>
@@ -628,15 +630,20 @@
 
         function kbOpenCreate() {
             kbEditingId = null;
-            document.getElementById('kbModalTitle').textContent = 'Nový záznam';
+            document.getElementById('kbModalTitle').textContent = 'Přidat z odkazu';
             ['kbFContent','kbFTitle','kbFUrl','kbFEventDate','kbFHighlightUntil','kbFLoadUrl'].forEach(id => document.getElementById(id).value = '');
-            document.getElementById('kbFCategory').value = 'poradna';
-            kbApplyCategory();
+            // URL-fetched pages go in as public web content.
+            document.getElementById('kbFSource').value = 'web';
+            document.getElementById('kbFAudience').value = 'public_web';
             document.getElementById('kbFIsEvent').checked = false;
             kbToggleEventFields();
             document.getElementById('kbModalError').textContent = '';
             document.getElementById('kbLoadStatus').textContent = '';
+            // URL is the only input: show the URL row, hide everything else.
             document.getElementById('kbLoadRow').style.display = '';
+            document.getElementById('kbLoadBtn').style.display = 'none';
+            document.getElementById('kbManualFields').style.display = 'none';
+            document.getElementById('kbSaveBtn').textContent = 'Přidat';
             document.getElementById('kbEditOverlay').classList.add('open');
         }
 
@@ -667,6 +674,8 @@
             document.getElementById('kbModalError').textContent = '';
             document.getElementById('kbLoadStatus').textContent = '';
             document.getElementById('kbLoadRow').style.display = 'none';
+            document.getElementById('kbManualFields').style.display = '';
+            document.getElementById('kbSaveBtn').textContent = 'Uložit';
             document.getElementById('kbEditOverlay').classList.add('open');
             try {
                 const c = await kbApi('GET', `/api/admin/chunks/${id}`);
@@ -685,7 +694,12 @@
             }
         }
 
-        async function kbSave() {
+        // Save button: editing an existing chunk vs. adding a new document from a URL.
+        function kbSave() {
+            return kbEditingId ? kbSaveEdit() : kbCreateFromUrl();
+        }
+
+        async function kbSaveEdit() {
             const content = document.getElementById('kbFContent').value.trim();
             if (!content) { document.getElementById('kbModalError').textContent = 'Text je povinný.'; return; }
             const btn = document.getElementById('kbSaveBtn');
@@ -701,25 +715,8 @@
                 highlight_until: isEvent ? (document.getElementById('kbFHighlightUntil').value || null) : null,
             };
             try {
-                if (kbEditingId) {
-                    await kbApi('PUT', `/api/admin/chunks/${kbEditingId}`, body);
-                    showToast('Záznam upraven.');
-                } else {
-                    // Before adding, check whether this looks like a newer version
-                    // of an existing document.
-                    let replaceUrl = null;
-                    const chk = await kbApi('POST', '/api/admin/chunks/check-replacement', { content, source_url: body.source_url });
-                    if (chk && chk.candidate) {
-                        const choice = await kbAskReplace(chk.candidate);
-                        if (choice === null) { btn.disabled = false; btn.textContent = 'Uložit'; return; }
-                        if (choice === 'replace') replaceUrl = chk.candidate.source_url;
-                    }
-                    document.getElementById('kbLoadStatus').textContent = 'Rozděluji na části a vytvářím embeddingy…';
-                    const r = await kbApi('POST', '/api/admin/chunks', replaceUrl ? { ...body, replace_url: replaceUrl } : body);
-                    let msg = r && r.count > 1 ? `Záznam přidán (${r.count} částí).` : 'Záznam přidán.';
-                    if (replaceUrl) msg += ' Starší verze smazána (lze obnovit).';
-                    showToast(msg);
-                }
+                await kbApi('PUT', `/api/admin/chunks/${kbEditingId}`, body);
+                showToast('Záznam upraven.');
                 kbCloseModal('kbEditOverlay');
                 kbLoad();
             } catch (e) {
@@ -727,6 +724,104 @@
             } finally {
                 btn.disabled = false; btn.textContent = 'Uložit';
             }
+        }
+
+        // Czech plural for "část" (part).
+        function kbCastPart(n) { return n === 1 ? 'část' : (n < 5 ? 'části' : 'částí'); }
+
+        // URL is the only input. Fetch the page (chrome stripped + video captions
+        // pulled server-side), check for an existing near-duplicate, then create
+        // the document while showing live chunking/embedding progress.
+        async function kbCreateFromUrl() {
+            const url = document.getElementById('kbFLoadUrl').value.trim();
+            const status = document.getElementById('kbLoadStatus');
+            const err = document.getElementById('kbModalError');
+            err.textContent = '';
+            if (!url) { err.textContent = 'Zadejte URL.'; return; }
+            const btn = document.getElementById('kbSaveBtn');
+            btn.disabled = true; btn.textContent = 'Pracuji…';
+            try {
+                status.textContent = 'Načítám stránku…';
+                const fetched = await kbApi('POST', '/api/admin/fetch-url', { url });
+                const content = (fetched.text || '').trim();
+                if (!content) throw new Error('Na stránce se nepodařilo najít žádný text.');
+
+                // Looks like a newer version of something already stored?
+                status.textContent = 'Kontroluji, zda už podobný záznam existuje…';
+                let replaceUrl = null;
+                const chk = await kbApi('POST', '/api/admin/chunks/check-replacement', { content, source_url: url });
+                if (chk && chk.candidate) {
+                    const choice = await kbAskReplace(chk.candidate);
+                    if (choice === null) { status.textContent = ''; return; }
+                    if (choice === 'replace') replaceUrl = chk.candidate.source_url;
+                }
+
+                const body = {
+                    content,
+                    document_title: fetched.title || null,
+                    source_url: url,
+                    source: 'web',
+                    audience: 'public_web',
+                    event_date: null,
+                    highlight_until: null
+                };
+                if (replaceUrl) body.replace_url = replaceUrl;
+                const count = await kbStreamCreate(body, status);
+                let msg = count > 1 ? `Záznam přidán (${count} ${kbCastPart(count)}).` : 'Záznam přidán.';
+                if (replaceUrl) msg += ' Starší verze nahrazena — lze vrátit zpět.';
+                showToast(msg);
+                kbCloseModal('kbEditOverlay');
+                kbLoad();
+            } catch (e) {
+                err.textContent = e.message;
+                status.textContent = '';
+            } finally {
+                btn.disabled = false; btn.textContent = 'Přidat';
+            }
+        }
+
+        // POST to the streaming create endpoint and update `status` from the
+        // Server-Sent progress events. Resolves with the number of pieces created.
+        async function kbStreamCreate(body, status) {
+            const r = await fetch('/api/admin/chunks/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!r.ok || !r.body) {
+                let msg = 'Uložení se nezdařilo. Zkuste to prosím znovu.';
+                try { const d = await r.json(); if (d.error) msg = d.ref ? `${d.error} (kód: ${d.ref})` : d.error; } catch (_) {}
+                throw new Error(msg);
+            }
+            const reader = r.body.getReader();
+            const dec = new TextDecoder();
+            let buf = '', total = 0, count = 0;
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += dec.decode(value, { stream: true });
+                let idx;
+                while ((idx = buf.indexOf('\n\n')) >= 0) {
+                    const raw = buf.slice(0, idx).trim();
+                    buf = buf.slice(idx + 2);
+                    if (!raw.startsWith('data:')) continue;
+                    const evt = JSON.parse(raw.slice(5).trim());
+                    if (evt.phase === 'chunking') {
+                        total = evt.total;
+                        status.textContent = `Rozděleno na ${total} ${kbCastPart(total)}. Vytvářím embeddingy…`;
+                    } else if (evt.phase === 'embedding') {
+                        status.textContent = `Vytvářím embeddingy… ${evt.done}/${evt.total}`;
+                    } else if (evt.phase === 'replacing') {
+                        status.textContent = 'Nahrazuji starší verzi…';
+                    } else if (evt.phase === 'done') {
+                        count = evt.count;
+                        status.textContent = 'Hotovo.';
+                    } else if (evt.phase === 'error') {
+                        throw new Error(evt.ref ? `${evt.error} (kód: ${evt.ref})` : evt.error);
+                    }
+                }
+            }
+            return count;
         }
 
         function kbOpenDelete(id) {

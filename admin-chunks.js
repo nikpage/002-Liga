@@ -193,9 +193,14 @@ function chunkText(text) {
 // How many pieces a given text will be split into (for the add-from-URL preview).
 exports.countChunks = (text) => chunkText(text).length;
 
-exports.createChunk = async ({ content, document_title, source_url, source, audience, event_date, highlight_until }) => {
+// onProgress (optional) is called as the document is processed so the UI can
+// show live chunking/embedding progress:
+//   { phase: 'chunking', total }              once, after splitting
+//   { phase: 'embedding', done, total }       after each piece is embedded
+exports.createChunk = async ({ content, document_title, source_url, source, audience, event_date, highlight_until }, onProgress) => {
     const pieces = chunkText(content);
     if (pieces.length === 0) throw new Error('Obsah je prázdný.');
+    if (onProgress) onProgress({ phase: 'chunking', total: pieces.length });
     const base = {
         document_title: document_title || null,
         source_url: source_url || null,
@@ -207,9 +212,12 @@ exports.createChunk = async ({ content, document_title, source_url, source, audi
     // Embed every piece first; if any embedding fails we insert nothing, so a
     // document is never saved half-embedded.
     const rows = [];
+    let done = 0;
     for (const piece of pieces) {
         const embedding = await getEmb(piece);
         rows.push({ content: piece, ...base, embedding });
+        done++;
+        if (onProgress) onProgress({ phase: 'embedding', done, total: pieces.length });
     }
     const { data, error } = await supabase
         .from(TABLE)
