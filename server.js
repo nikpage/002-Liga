@@ -609,6 +609,13 @@ app.get('/api/admin/chunks/:id', async (req, res) => {
     } catch (e) { adminError(res, e, 'get'); }
 });
 
+app.post('/api/admin/documents/delete', async (req, res) => {
+    try {
+        const result = await adminChunks.deleteDocument(req.body.url);
+        res.json(result);
+    } catch (e) { adminError(res, e, 'delete-document'); }
+});
+
 app.post('/api/admin/chunks/check-replacement', async (req, res) => {
     try {
         const result = await adminChunks.findReplacementCandidate(req.body.content, req.body.source_url);

@@ -154,14 +154,12 @@
                 <thead>
                     <tr>
                         <th>Obsah</th>
-                        <th>Zdroj / nadpis</th>
-                        <th>Audience</th>
                         <th>Přidáno</th>
                         <th>Akce</th>
                     </tr>
                 </thead>
                 <tbody id="kbTbody">
-                    <tr><td colspan="5" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>
+                    <tr><td colspan="3" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -219,7 +217,7 @@
     <!-- History Modal -->
     <div class="overlay" id="kbHistoryOverlay">
         <div class="modal">
-            <h2>Historie verzí</h2>
+            <h2>Vrátit zpět (historie verzí)</h2>
             <div id="kbHistoryContent"><span class="spinner"></span></div>
             <div class="modal-footer">
                 <button class="btn-ghost" onclick="kbCloseModal('kbHistoryOverlay')">Zavřít</button>
@@ -398,7 +396,7 @@
         // Toggle a result between the snippet and the full highlighted text.
         function kbTogglePreview(id) {
             const el = document.getElementById('kbprev-' + id);
-            const c = (kbResults || []).find(x => x.id === id);
+            const c = kbFindPiece(id);
             if (!el || !c) return;
             const search = document.getElementById('kbSearch').value.trim();
             if (el.dataset.full === '1') {
@@ -494,44 +492,79 @@
             const search = document.getElementById('kbSearch').value.trim();
             const tbody = document.getElementById('kbTbody');
             if (search.length < 2) {
-                tbody.innerHTML = '<tr><td colspan="5" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>';
                 document.getElementById('kbTotal').textContent = '';
                 document.getElementById('kbPagination').innerHTML = '';
                 return;
             }
-            tbody.innerHTML = '<tr><td colspan="5" class="loading"><span class="spinner"></span></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" class="loading"><span class="spinner"></span></td></tr>';
             try {
                 const filters = kbSelectedFilters().join(',');
-                const { chunks, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}&filters=${encodeURIComponent(filters)}`);
-                kbResults = chunks;
-                document.getElementById('kbTotal').textContent = `Celkem: ${total} záznamů`;
-                if (!chunks.length) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="loading">Žádné záznamy</td></tr>';
+                const { documents, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}&filters=${encodeURIComponent(filters)}`);
+                kbResults = documents || [];
+                document.getElementById('kbTotal').textContent = `Celkem: ${total} dokumentů`;
+                if (!kbResults.length) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="loading">Žádné dokumenty</td></tr>';
                 } else {
-                    tbody.innerHTML = chunks.map(c => { const snip = kbSnippetHtml(c.content, search); return `<tr>
-  <td class="kb-content">
-    <div class="kb-preview" id="kbprev-${c.id}" onclick="kbTogglePreview(${c.id})">${snip.html}</div>
-    <div class="kb-meta">ID: ${c.id}${snip.matched ? '' : ' · <span class="kb-loose">⚠ volná shoda</span>'}</div>
-  </td>
-  <td>
-    <div>${escapeHtml(c.document_title || '–')}</div>
-    <div class="kb-meta">${escapeHtml(c.source || '')}${c.source_url ? ` · <a href="${escapeHtml(c.source_url)}" target="_blank" style="color:#0066cc">link</a>` : ''}</div>
-    ${c.event_date ? `<div class="kb-meta">Událost: ${kbFmtDate(c.event_date)}</div>` : ''}
-    ${c.highlight_until ? `<div class="kb-meta">Zvýraznit do: ${kbFmtDate(c.highlight_until)}</div>` : ''}
-  </td>
-  <td>${kbAudTag(c.audience)}</td>
-  <td style="white-space:nowrap">${kbFmtDate(c.created_at)}</td>
-  <td class="kb-actions">
-    <button class="btn-ghost btn-sm" onclick="kbOpenEdit(${c.id})">Upravit</button>
-    <button class="btn-ghost btn-sm" onclick="kbOpenHistory(${c.id})">Historie</button>
-    <button class="btn-danger btn-sm" onclick="kbOpenDelete(${c.id})">Smazat</button>
-  </td>
-</tr>`; }).join('');
+                    tbody.innerHTML = kbResults.map((doc, idx) => kbRenderDoc(doc, idx, search)).join('');
                 }
                 kbRenderPagination(total);
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="5" class="error">${escapeHtml(e.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="3" class="error">${escapeHtml(e.message)}</td></tr>`;
             }
+        }
+
+        // One document = a header row (title/link/audience + whole-document delete)
+        // followed by a row per matching piece (chunk-level edit + undo-if-changed).
+        function kbRenderDoc(doc, idx, search) {
+            const link = doc.source_url
+                ? `<a href="${escapeHtml(doc.source_url)}" target="_blank" style="color:#0066cc;word-break:break-all">${escapeHtml(doc.source_url)}</a>`
+                : '<span class="kb-meta">bez odkazu</span>';
+            const n = doc.pieces.length;
+            const head = `<tr class="kb-doc-head"><td colspan="3" style="background:#f3f4f6;border-top:2px solid #d0d4da;padding:10px 12px">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <strong>${escapeHtml(doc.document_title || 'Bez názvu')}</strong>
+    ${kbAudTag(doc.audience)}
+    <span class="kb-meta">${n} ${n === 1 ? 'část' : (n < 5 ? 'části' : 'částí')}</span>
+    <button class="btn-danger btn-sm" style="margin-left:auto" onclick="kbDeleteDocument(${idx})">Smazat dokument</button>
+  </div>
+  <div style="margin-top:3px">${link}</div>
+</td></tr>`;
+            const pieces = doc.pieces.map(p => {
+                const snip = kbSnippetHtml(p.content, search);
+                return `<tr>
+  <td class="kb-content">
+    <div class="kb-preview" id="kbprev-${p.id}" onclick="kbTogglePreview(${p.id})">${snip.html}</div>
+    <div class="kb-meta">ID: ${p.id}${snip.matched ? '' : ' · <span class="kb-loose">⚠ volná shoda</span>'}</div>
+  </td>
+  <td style="white-space:nowrap">${kbFmtDate(p.created_at)}</td>
+  <td class="kb-actions">
+    <button class="btn-ghost btn-sm" onclick="kbOpenEdit(${p.id})">Upravit</button>
+    ${p.has_history ? `<button class="btn-ghost btn-sm" onclick="kbOpenHistory(${p.id})">Vrátit zpět</button>` : ''}
+  </td>
+</tr>`;
+            }).join('');
+            return head + pieces;
+        }
+
+        function kbFindPiece(id) {
+            for (const doc of kbResults) {
+                const p = (doc.pieces || []).find(x => x.id === id);
+                if (p) return p;
+            }
+            return null;
+        }
+
+        async function kbDeleteDocument(idx) {
+            const doc = kbResults[idx];
+            if (!doc) return;
+            if (!doc.source_url) { showToast('Dokument bez odkazu nelze hromadně smazat.', true); return; }
+            if (!confirm(`Smazat celý dokument „${doc.document_title || doc.source_url}"? Vše se uloží do historie — lze obnovit.`)) return;
+            try {
+                const r = await kbApi('POST', '/api/admin/documents/delete', { url: doc.source_url });
+                showToast(`Dokument smazán (${r.deleted} částí, lze obnovit).`);
+                kbLoad();
+            } catch (e) { showToast(e.message, true); }
         }
 
         function kbRenderPagination(total) {

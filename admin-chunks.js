@@ -55,30 +55,75 @@ function buildOrFilter(filters) {
     return keys.map(k => FILTER_PREDICATES[k]).join(',');
 }
 
+// Group matching chunks into documents, keyed by the document URL (the part
+// before any #anchor); manual entries with no URL fall back to title/id.
+function groupDocuments(chunks) {
+    const groups = [];
+    const byKey = new Map();
+    for (const c of chunks) {
+        const base = (c.source_url || '').split('#')[0];
+        const key = base || (c.document_title ? 'title:' + c.document_title : 'id:' + c.id);
+        let g = byKey.get(key);
+        if (!g) {
+            g = { key, source_url: base || null, document_title: c.document_title || null, audience: c.audience, source: c.source, pieces: [] };
+            byKey.set(key, g);
+            groups.push(g);
+        }
+        g.pieces.push(c);
+    }
+    return groups;
+}
+
+// Mark which pieces actually have saved history, so the UI only offers "undo"
+// where there is something to undo.
+async function enrichHistory(pieces) {
+    const ids = pieces.map(p => p.id);
+    if (!ids.length) return;
+    const { data } = await supabase.from(HISTORY).select('chunk_id').in('chunk_id', ids);
+    const withHist = new Set((data || []).map(r => r.chunk_id));
+    for (const p of pieces) p.has_history = withHist.has(p.id);
+}
+
+// Run a query, group results into documents, paginate by document.
+async function searchGrouped(buildQuery, offset, limit) {
+    const { data, error } = await buildQuery();
+    if (error) return { error };
+    const groups = groupDocuments(data || []);
+    const page = groups.slice(offset, offset + limit);
+    await enrichHistory(page.flatMap(g => g.pieces));
+    return { documents: page, total: groups.length };
+}
+
+// offset/limit are document-based here (one "row" = one document).
 exports.listChunks = async (search, offset = 0, limit = 50, filters = []) => {
     const orFilter = buildOrFilter(filters);
     if (search) {
         // Typo-tolerant fuzzy search via the pg_trgm-backed DB function.
-        let fq = supabase
-            .rpc('search_chunks_fuzzy', { search_text: search }, { count: 'exact' })
-            .select(CHUNK_COLS);
-        if (orFilter) fq = fq.or(orFilter);
-        const fuzzy = await fq.range(offset, offset + limit - 1);
-        if (!fuzzy.error) {
-            return { chunks: fuzzy.data || [], total: fuzzy.count };
-        }
-        // Fallback: function not installed yet -> keep exact search working.
+        const res = await searchGrouped(() => {
+            let fq = supabase.rpc('search_chunks_fuzzy', { search_text: search }).select(CHUNK_COLS).limit(2000);
+            if (orFilter) fq = fq.or(orFilter);
+            return fq;
+        }, offset, limit);
+        if (!res.error) return res;
+        // Fallback: function not installed yet -> exact search, still grouped.
+        const res2 = await searchGrouped(() => {
+            let q = supabase.from(TABLE).select(CHUNK_COLS).order('created_at', { ascending: false }).ilike('content', `%${search}%`).limit(2000);
+            if (orFilter) q = q.or(orFilter);
+            return q;
+        }, offset, limit);
+        if (!res2.error) return res2;
+        throw res2.error;
     }
+    // No search term (not used by the current UI): plain ungrouped list.
     let q = supabase
         .from(TABLE)
         .select(CHUNK_COLS, { count: 'exact' })
         .order('created_at', { ascending: false });
     if (orFilter) q = q.or(orFilter);
-    if (search) q = q.ilike('content', `%${search}%`);
     q = q.range(offset, offset + limit - 1);
     const { data, error, count } = await q;
     if (error) throw error;
-    return { chunks: data || [], total: count };
+    return { documents: [], chunks: data || [], total: count };
 };
 
 exports.getChunk = async (id) => {
