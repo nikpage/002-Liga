@@ -592,6 +592,15 @@ function adminErrorInfo(e, action) {
                msg.includes('503') || msg.includes('502') || msg.includes('500') || msg.includes('dimension')) {
         userMsg = 'Služba AI je dočasně nedostupná. Zkuste to prosím za chvíli znovu.';
     } else {
+        // Unknown failure: surface the real cause (briefly) instead of hiding
+        // it, so it can actually be diagnosed without digging through logs.
+        const detail = [e && e.code, (e && e.message) || (e && e.details)]
+            .filter(Boolean).join(': ').replace(/\s+/g, ' ').slice(0, 180);
+        if (detail) {
+            // Code is embedded in the message here; suppress the separate ref
+            // so the front-end doesn't print it twice.
+            return { userMsg: `Došlo k technické chybě: ${detail} (kód: ${ref})`, ref: null };
+        }
         userMsg = 'Došlo k technické chybě. Kontaktujte prosím Nika a uveďte kód níže.';
     }
     return { userMsg, ref };
