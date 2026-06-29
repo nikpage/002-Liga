@@ -580,6 +580,9 @@ app.post('/tts', async (req, res) => {
 function adminErrorInfo(e, action) {
     const ref = (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).slice(-6).toUpperCase();
     console.error(`[ADMIN ${action} ERR ${ref}]`, e && e.stack ? e.stack : e);
+    // User-fixable problems (bad URL, scanned/empty file, unreadable file)
+    // carry their own clear message — show it as-is, no scary code.
+    if (e && e.userFacing) return { userMsg: e.message, ref: null };
     const msg = ((e && e.message) || '').toLowerCase();
     let userMsg;
     if (msg.includes('quota') || msg.includes('429') || msg.includes('resource_exhausted') || msg.includes('rate limit')) {
@@ -618,10 +621,10 @@ app.get('/api/admin/chunks/:id', async (req, res) => {
 app.post('/api/admin/fetch-url', async (req, res) => {
     try {
         const { url } = req.body;
-        if (!url) throw new Error('Chybí URL.');
+        if (!url) { const e = new Error('Zadejte prosím odkaz (URL).'); e.userFacing = true; throw e; }
         const { title, text, videoText } = await extractFromUrl(url);
         const combined = videoText ? `${text}\n\n[Přepis videa]\n${videoText}` : text;
-        if (!combined.trim()) throw new Error('Na stránce se nepodařilo najít žádný text.');
+        if (!combined.trim()) { const e = new Error('Na stránce se nepodařilo najít žádný text.'); e.userFacing = true; throw e; }
         res.json({ title, text: combined, chunkCount: adminChunks.countChunks(combined), hasVideo: !!videoText });
     } catch (e) { adminError(res, e, 'fetch-url'); }
 });

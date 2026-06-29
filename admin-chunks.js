@@ -199,7 +199,7 @@ exports.countChunks = (text) => chunkText(text).length;
 //   { phase: 'embedding', done, total }       after each piece is embedded
 exports.createChunk = async ({ content, document_title, source_url, source, audience, event_date, highlight_until }, onProgress) => {
     const pieces = chunkText(content);
-    if (pieces.length === 0) throw new Error('Obsah je prázdný.');
+    if (pieces.length === 0) { const e = new Error('Obsah je prázdný – není co uložit.'); e.userFacing = true; throw e; }
     if (onProgress) onProgress({ phase: 'chunking', total: pieces.length });
     const base = {
         document_title: document_title || null,
@@ -215,7 +215,7 @@ exports.createChunk = async ({ content, document_title, source_url, source, audi
     let done = 0;
     for (const piece of pieces) {
         const embedding = await getEmb(piece);
-        rows.push({ content: piece, ...base, embedding });
+        rows.push({ content: piece, ...base, embedding, chunk_index: done });
         done++;
         if (onProgress) onProgress({ phase: 'embedding', done, total: pieces.length });
     }
