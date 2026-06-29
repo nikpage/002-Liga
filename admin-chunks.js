@@ -17,6 +17,7 @@ async function saveHistory(chunk, action) {
         audience: chunk.audience,
         event_date: chunk.event_date,
         highlight_until: chunk.highlight_until,
+        embedding: chunk.embedding ?? null,
         action
     });
     // Prune to MAX_HISTORY versions per chunk
@@ -32,6 +33,13 @@ async function saveHistory(chunk, action) {
 }
 
 const CHUNK_COLS = 'id, content, document_title, source_url, source, audience, event_date, highlight_until, created_at';
+
+// Fetch just the stored embedding vector for a chunk (kept out of the normal
+// SELECT list so the large vector isn't sent to the browser unnecessarily).
+async function getEmbeddingFor(id) {
+    const { data } = await supabase.from(TABLE).select('embedding').eq('id', id).single();
+    return data ? data.embedding : null;
+}
 
 exports.listChunks = async (search, offset = 0, limit = 50) => {
     if (search) {
@@ -93,7 +101,8 @@ exports.updateChunk = async (id, fields) => {
     const changed = EDITABLE_FIELDS.some(f => f in fields && normVal(f, fields[f]) !== normVal(f, existing[f]));
     // Nothing actually changed -> don't write an identical history version.
     if (!changed) return existing;
-    await saveHistory(existing, 'edit');
+    const prevEmbedding = await getEmbeddingFor(id);
+    await saveHistory({ ...existing, embedding: prevEmbedding }, 'edit');
     const update = { ...fields };
     if (fields.content && fields.content !== existing.content) {
         update.embedding = await getEmb(fields.content);
@@ -110,7 +119,8 @@ exports.updateChunk = async (id, fields) => {
 
 exports.deleteChunk = async (id) => {
     const existing = await exports.getChunk(id);
-    await saveHistory(existing, 'delete');
+    const prevEmbedding = await getEmbeddingFor(id);
+    await saveHistory({ ...existing, embedding: prevEmbedding }, 'delete');
     const { error } = await supabase.from(TABLE).delete().eq('id', id);
     if (error) throw error;
 };
@@ -139,8 +149,11 @@ exports.restoreChunk = async (chunkId, historyId) => {
 
     if (existing) {
         const cur = await exports.getChunk(chunkId);
-        await saveHistory(cur, 'edit');
-        const embedding = await getEmb(hRow.content);
+        const curEmbedding = await getEmbeddingFor(chunkId);
+        await saveHistory({ ...cur, embedding: curEmbedding }, 'edit');
+        // Reuse the stored vector; only recompute for old history rows saved
+        // before embeddings were kept in history.
+        const embedding = hRow.embedding ?? await getEmb(hRow.content);
         const { data, error } = await supabase
             .from(TABLE)
             .update({ content: hRow.content, document_title: hRow.document_title, source_url: hRow.source_url, source: hRow.source, audience: hRow.audience, event_date: hRow.event_date, highlight_until: hRow.highlight_until, embedding })
@@ -151,7 +164,7 @@ exports.restoreChunk = async (chunkId, historyId) => {
         return data;
     } else {
         // Chunk was deleted — recreate it
-        const embedding = await getEmb(hRow.content);
+        const embedding = hRow.embedding ?? await getEmb(hRow.content);
         const { data, error } = await supabase
             .from(TABLE)
             .insert({ content: hRow.content, document_title: hRow.document_title, source_url: hRow.source_url, source: hRow.source, audience: hRow.audience, event_date: hRow.event_date, highlight_until: hRow.highlight_until, embedding })
