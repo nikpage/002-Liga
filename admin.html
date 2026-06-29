@@ -1,182 +1,370 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Q&A Log - Admin</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        h1 { font-size: 1.4em; }
-        .stats { color: #666; font-size: 0.9em; }
-        .actions { display: flex; gap: 10px; }
-        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 500; }
-        .btn-export { background: #217346; color: white; }
-        .btn-export:hover { background: #1a5c38; }
-        .btn-refresh { background: #0066cc; color: white; }
-        .btn-refresh:hover { background: #0052a3; }
-        .btn-export:disabled, .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-        .table-wrap { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-        th { background: #f8f8f8; text-align: left; padding: 10px 12px; border-bottom: 2px solid #e0e0e0; white-space: nowrap; position: sticky; top: 0; }
-        td { padding: 10px 12px; border-bottom: 1px solid #eee; vertical-align: top; }
-        td.col-id { width: 50px; color: #999; }
-        td.col-date { width: 150px; white-space: nowrap; color: #666; }
-        td.col-question { width: 25%; }
-        td.col-answer { max-width: 500px; }
-        td.col-answer div { max-height: 120px; overflow: hidden; position: relative; }
-        td.col-answer div.expanded { max-height: none; }
-        td.col-answer .toggle { color: #0066cc; cursor: pointer; font-size: 0.85em; display: block; margin-top: 4px; }
-        td.col-answer h1 { font-size: 1.05em; margin: 0.6em 0 0.3em; color: #007bff; }
-        td.col-answer h2 { font-size: 0.95em; margin: 0.5em 0 0.2em; }
-        td.col-answer h3 { font-size: 0.9em; margin: 0.4em 0 0.2em; }
-        td.col-answer p { margin: 0.3em 0; }
-        td.col-answer ul, td.col-answer ol { padding-left: 1.2em; margin: 0.3em 0; }
-        td.col-answer li { margin-bottom: 0.2em; }
-        td.col-answer a { color: #0066cc; }
-        tr:hover { background: #fafafa; }
-        .loading { text-align: center; padding: 40px; color: #999; }
-        .error { text-align: center; padding: 40px; color: #cc0000; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin – znalostní báze</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
+header { background: #1a1a2e; color: #fff; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+header h1 { font-size: 1.1rem; font-weight: 600; }
+.badge { background: #e63946; color: #fff; border-radius: 4px; padding: 2px 8px; font-size: .75rem; }
+.container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+.toolbar { display: flex; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+.toolbar input[type=text] { flex: 1; min-width: 200px; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 6px; font-size: .95rem; }
+button { padding: .5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; font-weight: 500; }
+.btn-primary { background: #1a1a2e; color: #fff; }
+.btn-primary:hover { background: #2d2d50; }
+.btn-danger { background: #e63946; color: #fff; }
+.btn-danger:hover { background: #c1121f; }
+.btn-ghost { background: transparent; color: #555; border: 1px solid #ccc; }
+.btn-ghost:hover { background: #eee; }
+.btn-sm { padding: .3rem .65rem; font-size: .8rem; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+th { background: #f0f0f0; padding: .65rem 1rem; text-align: left; font-size: .82rem; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+td { padding: .65rem 1rem; border-top: 1px solid #eee; font-size: .88rem; vertical-align: top; }
+td.content-cell { max-width: 420px; }
+.content-preview { white-space: pre-wrap; word-break: break-word; max-height: 80px; overflow: hidden; cursor: pointer; color: #333; }
+.content-preview.expanded { max-height: none; }
+.meta { color: #888; font-size: .78rem; margin-top: .25rem; }
+.audience-tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+.tag-public { background: #d0f0c0; color: #1a5c00; }
+.tag-poradna { background: #cce0ff; color: #003399; }
+.tag-other { background: #eee; color: #555; }
+.actions { display: flex; gap: .4rem; white-space: nowrap; }
+.pagination { display: flex; gap: .5rem; align-items: center; margin-top: 1rem; justify-content: center; }
+.total-label { margin-left: auto; color: #888; font-size: .85rem; }
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; align-items: center; justify-content: center; }
+.overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 10px; padding: 1.5rem; width: min(680px, 95vw); max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+.modal h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+.form-group { margin-bottom: .9rem; }
+label { display: block; font-size: .82rem; font-weight: 600; color: #555; margin-bottom: .3rem; }
+input[type=text], input[type=date], textarea, select { width: 100%; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; font-family: inherit; }
+textarea { min-height: 140px; resize: vertical; }
+.modal-footer { display: flex; gap: .75rem; justify-content: flex-end; margin-top: 1.2rem; }
+.error-msg { color: #e63946; font-size: .85rem; margin-top: .5rem; }
+.history-list { margin-top: .75rem; }
+.history-item { background: #f9f9f9; border: 1px solid #eee; border-radius: 6px; padding: .75rem 1rem; margin-bottom: .6rem; }
+.history-item .h-meta { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+.history-item .h-action { font-weight: 700; font-size: .8rem; text-transform: uppercase; }
+.action-edit { color: #0077cc; }
+.action-delete { color: #e63946; }
+.history-item .h-content { font-size: .85rem; color: #444; white-space: pre-wrap; max-height: 60px; overflow: hidden; }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #1a1a2e; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #222; color: #fff; padding: .7rem 1.2rem; border-radius: 8px; font-size: .9rem; opacity: 0; transition: opacity .3s; z-index: 200; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1>Q&A Log</h1>
-            <span class="stats" id="stats"></span>
-        </div>
-        <div class="actions">
-            <button class="btn-refresh" id="refreshBtn" onclick="loadLogs()">Obnovit</button>
-            <button class="btn-export" id="exportBtn" onclick="exportExcel()" disabled>Exportovat do Excelu</button>
-        </div>
-    </div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Datum</th>
-                    <th>Otazka</th>
-                    <th>Odpoved</th>
-                </tr>
-            </thead>
-            <tbody id="tbody">
-                <tr><td colspan="4" class="loading">Nacitam...</td></tr>
-            </tbody>
-        </table>
+<header>
+    <h1>Znalostní báze – správa záznamů</h1>
+    <span class="badge">Admin</span>
+</header>
+
+<div class="container">
+    <div class="toolbar">
+        <input type="text" id="searchInput" placeholder="Hledat v obsahu…" />
+        <button class="btn-ghost" onclick="loadChunks()">Hledat</button>
+        <button class="btn-primary" onclick="openCreate()">+ Nový záznam</button>
+        <span class="total-label" id="totalLabel"></span>
     </div>
 
-    <script>
-        let allLogs = [];
+    <table>
+        <thead>
+            <tr>
+                <th>Obsah</th>
+                <th>Zdroj / nadpis</th>
+                <th>Audience</th>
+                <th>Přidáno</th>
+                <th>Akce</th>
+            </tr>
+        </thead>
+        <tbody id="chunksTable">
+            <tr><td colspan="5" style="text-align:center;padding:2rem;color:#aaa"><span class="spinner"></span></td></tr>
+        </tbody>
+    </table>
 
-        async function loadLogs() {
-            const tbody = document.getElementById('tbody');
-            const stats = document.getElementById('stats');
-            const exportBtn = document.getElementById('exportBtn');
-            const refreshBtn = document.getElementById('refreshBtn');
+    <div class="pagination" id="pagination"></div>
+</div>
 
-            tbody.innerHTML = '<tr><td colspan="4" class="loading">Nacitam...</td></tr>';
-            refreshBtn.disabled = true;
+<!-- Edit / Create Modal -->
+<div class="overlay" id="editOverlay">
+    <div class="modal">
+        <h2 id="modalTitle">Nový záznam</h2>
+        <div class="form-group">
+            <label>Obsah *</label>
+            <textarea id="fContent" placeholder="Text záznamu…"></textarea>
+        </div>
+        <div class="form-group">
+            <label>Nadpis dokumentu</label>
+            <input type="text" id="fTitle" placeholder="např. Služby – přeprava" />
+        </div>
+        <div class="form-group">
+            <label>URL zdroje</label>
+            <input type="text" id="fUrl" placeholder="https://…" />
+        </div>
+        <div class="form-group">
+            <label>Zdroj (source)</label>
+            <select id="fSource">
+                <option value="manual">manual</option>
+                <option value="web">web</option>
+                <option value="facebook">facebook</option>
+                <option value="poradna">poradna</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Audience</label>
+            <select id="fAudience">
+                <option value="public_web">public_web</option>
+                <option value="poradna_internal">poradna_internal</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Datum události (event_date)</label>
+            <input type="date" id="fEventDate" />
+        </div>
+        <div class="form-group">
+            <label>Zvýraznit do (highlight_until)</label>
+            <input type="date" id="fHighlightUntil" />
+        </div>
+        <div class="error-msg" id="modalError"></div>
+        <div class="modal-footer">
+            <button class="btn-ghost" onclick="closeModal('editOverlay')">Zrušit</button>
+            <button class="btn-primary" id="saveBtn" onclick="saveChunk()">Uložit</button>
+        </div>
+    </div>
+</div>
 
-            try {
-                const res = await fetch('/api/qa-logs?limit=5000');
-                const data = await res.json();
-                allLogs = data.logs || [];
+<!-- History Modal -->
+<div class="overlay" id="historyOverlay">
+    <div class="modal">
+        <h2>Historie verzí</h2>
+        <div id="historyContent"><span class="spinner"></span></div>
+        <div class="modal-footer">
+            <button class="btn-ghost" onclick="closeModal('historyOverlay')">Zavřít</button>
+        </div>
+    </div>
+</div>
 
-                stats.textContent = `Celkem: ${data.total || allLogs.length} zaznamu`;
-                exportBtn.disabled = allLogs.length === 0;
+<!-- Delete Confirm Modal -->
+<div class="overlay" id="deleteOverlay">
+    <div class="modal">
+        <h2>Smazat záznam?</h2>
+        <p style="margin:.75rem 0;color:#555">Před smazáním se uloží záloha do historie (lze obnovit).</p>
+        <div class="modal-footer">
+            <button class="btn-ghost" onclick="closeModal('deleteOverlay')">Zrušit</button>
+            <button class="btn-danger" id="confirmDeleteBtn">Smazat</button>
+        </div>
+    </div>
+</div>
 
-                if (allLogs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="loading">Zadne zaznamy</td></tr>';
-                    return;
-                }
+<div class="toast" id="toast"></div>
 
-                marked.setOptions({ breaks: true });
-                tbody.innerHTML = allLogs.map((log, i) => {
-                    const date = new Date(log.created_at).toLocaleString('cs-CZ');
-                    const rawAnswer = log.answer || '';
-                    const renderedAnswer = marked.parse(rawAnswer);
-                    return `<tr>
-                        <td class="col-id">${i + 1}</td>
-                        <td class="col-date">${date}</td>
-                        <td class="col-question">${escapeHtml(log.question || '')}</td>
-                        <td class="col-answer">
-                            <div id="ans-${i}">${renderedAnswer}</div>
-                            ${rawAnswer.length > 300 ? `<span class="toggle" onclick="toggleAnswer(${i})">Zobrazit vice</span>` : ''}
-                        </td>
-                    </tr>`;
-                }).join('');
-            } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="4" class="error">Chyba: ${err.message}</td></tr>`;
-            } finally {
-                refreshBtn.disabled = false;
-            }
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 50;
+let editingId = null;
+
+async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(path, opts);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    return data;
+}
+
+function toast(msg, isError) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.background = isError ? '#e63946' : '#222';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function audienceTag(aud) {
+    if (aud === 'public_web') return '<span class="audience-tag tag-public">public</span>';
+    if (aud === 'poradna_internal') return '<span class="audience-tag tag-poradna">poradna</span>';
+    return `<span class="audience-tag tag-other">${aud || '–'}</span>`;
+}
+
+function formatDate(d) {
+    if (!d) return '–';
+    return new Date(d).toLocaleDateString('cs-CZ');
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadChunks() {
+    const search = document.getElementById('searchInput').value.trim();
+    const tbody = document.getElementById('chunksTable');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#aaa"><span class="spinner"></span></td></tr>';
+    try {
+        const { chunks, total } = await api('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${currentPage * PAGE_SIZE}&limit=${PAGE_SIZE}`);
+        document.getElementById('totalLabel').textContent = `Celkem: ${total} záznamů`;
+        if (!chunks.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#aaa">Žádné záznamy</td></tr>';
+        } else {
+            tbody.innerHTML = chunks.map(c => `
+<tr>
+  <td class="content-cell">
+    <div class="content-preview" onclick="this.classList.toggle('expanded')">${escHtml(c.content)}</div>
+    <div class="meta">ID: ${c.id}</div>
+  </td>
+  <td>
+    <div>${escHtml(c.document_title || '–')}</div>
+    <div class="meta">${escHtml(c.source || '')}${c.source_url ? ` · <a href="${escHtml(c.source_url)}" target="_blank" style="color:#0077cc">link</a>` : ''}</div>
+    ${c.event_date ? `<div class="meta">Událost: ${formatDate(c.event_date)}</div>` : ''}
+    ${c.highlight_until ? `<div class="meta">Zvýraznit do: ${formatDate(c.highlight_until)}</div>` : ''}
+  </td>
+  <td>${audienceTag(c.audience)}</td>
+  <td style="white-space:nowrap">${formatDate(c.created_at)}</td>
+  <td class="actions">
+    <button class="btn-ghost btn-sm" onclick="openEdit(${c.id})">Upravit</button>
+    <button class="btn-ghost btn-sm" onclick="openHistory(${c.id})">Historie</button>
+    <button class="btn-danger btn-sm" onclick="openDelete(${c.id})">Smazat</button>
+  </td>
+</tr>`).join('');
         }
+        renderPagination(total);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#e63946;padding:1rem">${escHtml(e.message)}</td></tr>`;
+    }
+}
 
-        function toggleAnswer(i) {
-            const div = document.getElementById('ans-' + i);
-            const toggle = div.nextElementSibling;
-            div.classList.toggle('expanded');
-            toggle.textContent = div.classList.contains('expanded') ? 'Skryt' : 'Zobrazit vice';
+function renderPagination(total) {
+    const pages = Math.ceil(total / PAGE_SIZE);
+    const el = document.getElementById('pagination');
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    let html = '';
+    if (currentPage > 0) html += `<button class="btn-ghost btn-sm" onclick="goPage(${currentPage-1})">← Předchozí</button>`;
+    html += `<span style="font-size:.85rem;color:#555">Strana ${currentPage+1} / ${pages}</span>`;
+    if (currentPage < pages - 1) html += `<button class="btn-ghost btn-sm" onclick="goPage(${currentPage+1})">Další →</button>`;
+    el.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; loadChunks(); }
+
+function openCreate() {
+    editingId = null;
+    document.getElementById('modalTitle').textContent = 'Nový záznam';
+    ['fContent','fTitle','fUrl','fEventDate','fHighlightUntil'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fSource').value = 'manual';
+    document.getElementById('fAudience').value = 'public_web';
+    document.getElementById('modalError').textContent = '';
+    document.getElementById('editOverlay').classList.add('open');
+}
+
+async function openEdit(id) {
+    editingId = id;
+    document.getElementById('modalTitle').textContent = 'Upravit záznam';
+    document.getElementById('modalError').textContent = '';
+    document.getElementById('editOverlay').classList.add('open');
+    try {
+        const c = await api('GET', `/api/admin/chunks/${id}`);
+        document.getElementById('fContent').value = c.content || '';
+        document.getElementById('fTitle').value = c.document_title || '';
+        document.getElementById('fUrl').value = c.source_url || '';
+        document.getElementById('fSource').value = c.source || 'manual';
+        document.getElementById('fAudience').value = c.audience || 'public_web';
+        document.getElementById('fEventDate').value = c.event_date ? c.event_date.split('T')[0] : '';
+        document.getElementById('fHighlightUntil').value = c.highlight_until ? c.highlight_until.split('T')[0] : '';
+    } catch (e) {
+        document.getElementById('modalError').textContent = e.message;
+    }
+}
+
+async function saveChunk() {
+    const content = document.getElementById('fContent').value.trim();
+    if (!content) { document.getElementById('modalError').textContent = 'Obsah je povinný.'; return; }
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true; btn.textContent = 'Ukládám…';
+    const body = {
+        content,
+        document_title: document.getElementById('fTitle').value.trim() || null,
+        source_url: document.getElementById('fUrl').value.trim() || null,
+        source: document.getElementById('fSource').value,
+        audience: document.getElementById('fAudience').value,
+        event_date: document.getElementById('fEventDate').value || null,
+        highlight_until: document.getElementById('fHighlightUntil').value || null,
+    };
+    try {
+        if (editingId) {
+            await api('PUT', `/api/admin/chunks/${editingId}`, body);
+            toast('Záznam upraven.');
+        } else {
+            await api('POST', '/api/admin/chunks', body);
+            toast('Záznam přidán.');
         }
+        closeModal('editOverlay');
+        loadChunks();
+    } catch (e) {
+        document.getElementById('modalError').textContent = e.message;
+    } finally {
+        btn.disabled = false; btn.textContent = 'Uložit';
+    }
+}
 
-        function escapeHtml(str) {
-            const d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
+function openDelete(id) {
+    document.getElementById('deleteOverlay').classList.add('open');
+    document.getElementById('confirmDeleteBtn').onclick = async () => {
+        try {
+            await api('DELETE', `/api/admin/chunks/${id}`);
+            toast('Záznam smazán.');
+            closeModal('deleteOverlay');
+            loadChunks();
+        } catch (e) { toast(e.message, true); }
+    };
+}
+
+async function openHistory(id) {
+    document.getElementById('historyContent').innerHTML = '<span class="spinner"></span>';
+    document.getElementById('historyOverlay').classList.add('open');
+    try {
+        const rows = await api('GET', `/api/admin/chunks/${id}/history`);
+        if (!rows.length) {
+            document.getElementById('historyContent').innerHTML = '<p style="color:#aaa">Žádná historie.</p>';
+            return;
         }
+        const html = rows.map(h => `
+<div class="history-item">
+  <div class="h-meta">
+    <span class="h-action action-${h.action}">${h.action === 'edit' ? 'Úprava' : 'Smazání'}</span>
+    <span style="color:#aaa;font-size:.78rem">${new Date(h.created_at).toLocaleString('cs-CZ')}</span>
+    <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="restoreVersion(${id}, ${h.id})">Obnovit tuto verzi</button>
+  </div>
+  <div class="h-content">${escHtml(h.content)}</div>
+</div>`).join('');
+        document.getElementById('historyContent').innerHTML = `<div class="history-list">${html}</div>`;
+    } catch (e) {
+        document.getElementById('historyContent').innerHTML = `<p style="color:#e63946">${escHtml(e.message)}</p>`;
+    }
+}
 
-        function stripMarkdown(text) {
-            if (!text) return '';
-            // Remove markdown links [text](url) -> text
-            text = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
-            // Remove headers (# ## ###) but keep text
-            text = text.replace(/^#{1,3}\s+/gm, '');
-            // Remove bold/italic
-            text = text.replace(/(\*\*|__)(.*?)\1/g, '$2');
-            text = text.replace(/(\*|_)(.*?)\1/g, '$2');
-            // Remove horizontal rules
-            text = text.replace(/^---+$/gm, '');
-            // Remove bullet markers but keep text
-            text = text.replace(/^[•*-]\s+/gm, '- ');
-            // Remove emojis
-            text = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-            // Collapse excessive newlines
-            text = text.replace(/\n{3,}/g, '\n\n');
-            return text.trim();
-        }
+async function restoreVersion(chunkId, historyId) {
+    if (!confirm('Obnovit tuto verzi? Aktuální stav se uloží do historie.')) return;
+    try {
+        await api('POST', `/api/admin/chunks/${chunkId}/restore/${historyId}`);
+        toast('Verze obnovena.');
+        closeModal('historyOverlay');
+        loadChunks();
+    } catch (e) { toast(e.message, true); }
+}
 
-        function exportExcel() {
-            if (allLogs.length === 0) return;
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+}
 
-            const rows = allLogs.map((log, i) => ({
-                '#': i + 1,
-                'Datum': new Date(log.created_at).toLocaleString('cs-CZ'),
-                'Otazka': log.question || '',
-                'Odpoved': stripMarkdown(log.answer || '')
-            }));
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') { currentPage = 0; loadChunks(); } });
+document.querySelectorAll('.overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); }));
 
-            const ws = XLSX.utils.json_to_sheet(rows);
-
-            // Auto-size columns
-            ws['!cols'] = [
-                { wch: 5 },
-                { wch: 20 },
-                { wch: 40 },
-                { wch: 80 }
-            ];
-
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'QA Log');
-
-            const today = new Date().toISOString().slice(0, 10);
-            XLSX.writeFile(wb, `qa-log-${today}.xlsx`);
-        }
-
-        loadLogs();
-    </script>
+loadChunks();
+</script>
 </body>
 </html>

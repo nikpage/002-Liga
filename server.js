@@ -12,6 +12,7 @@ const { search } = require('./search');
 const { getTTS } = require('./ai-client');
 const { getQALogs, getAudienceCounts } = require('./database');
 const { login: ewayLogin, callMethod: ewayCall, getLastLog: ewayGetLastLog } = require('./eway-crm');
+const adminChunks = require('./admin-chunks');
 
 const app = express();
 app.use(cors());
@@ -569,6 +570,57 @@ app.post('/tts', async (req, res) => {
         console.error("TTS Route Error:", error);
         res.status(500).json({ error: 'TTS generation failed' });
     }
+});
+
+// --- Admin Chunks API ---
+app.get('/api/admin/chunks', async (req, res) => {
+    try {
+        const { search, offset, limit } = req.query;
+        const result = await adminChunks.listChunks(search, parseInt(offset) || 0, parseInt(limit) || 50);
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/chunks/:id', async (req, res) => {
+    try {
+        const chunk = await adminChunks.getChunk(req.params.id);
+        res.json(chunk);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/chunks', async (req, res) => {
+    try {
+        const chunk = await adminChunks.createChunk(req.body);
+        res.json(chunk);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/chunks/:id', async (req, res) => {
+    try {
+        const chunk = await adminChunks.updateChunk(req.params.id, req.body);
+        res.json(chunk);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/chunks/:id', async (req, res) => {
+    try {
+        await adminChunks.deleteChunk(req.params.id);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/chunks/:id/history', async (req, res) => {
+    try {
+        const history = await adminChunks.getHistory(req.params.id);
+        res.json(history);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/chunks/:id/restore/:historyId', async (req, res) => {
+    try {
+        const chunk = await adminChunks.restoreChunk(req.params.id, req.params.historyId);
+        res.json(chunk);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const port = process.env.PORT || 3000;
