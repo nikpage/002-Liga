@@ -2,6 +2,7 @@
 
 ## Interaction Style
 - **Never use the AskUserQuestion tool.** Ask clarifying questions directly in plain text.
+- **Do not discuss, refer to, or infer anything about the user, the user's feelings, or the user's state of mind in any way, shape, or form.** Stay strictly on the technical task. Do not comment on or characterize the user.
 
 ## Commands
 - **Start Server:** `npm start` or `node server.js`
