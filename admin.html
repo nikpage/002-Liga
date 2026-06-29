@@ -451,10 +451,15 @@
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
             if (body) opts.body = JSON.stringify(body);
             const r = await fetch(path, opts);
-            const data = await r.json();
-            if (!r.ok) {
-                const msg = data.error || 'Došlo k chybě. Zkuste to prosím znovu.';
-                throw new Error(data.ref ? `${msg} (kód: ${data.ref})` : msg);
+            // The response is not always JSON: a 404/500 from the host or proxy
+            // is an HTML page. Read as text and parse defensively so the user
+            // sees a real message instead of "Unexpected token '<'".
+            const raw = await r.text();
+            let data = null;
+            try { data = raw ? JSON.parse(raw) : null; } catch (_) { data = null; }
+            if (!r.ok || data === null) {
+                const msg = (data && data.error) || `Server odpověděl chybou (HTTP ${r.status}). Zkuste to prosím znovu.`;
+                throw new Error(data && data.ref ? `${msg} (kód: ${data.ref})` : msg);
             }
             return data;
         }
