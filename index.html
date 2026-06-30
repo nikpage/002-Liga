@@ -175,11 +175,12 @@
     <script>
         marked.setOptions({ breaks: true });
 
-        // Open all links in a new tab so clicking a source never navigates away from the app.
-        const renderer = new marked.Renderer();
-        const _link = renderer.link.bind(renderer);
-        renderer.link = (href, title, text) => _link(href, title, text).replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
-        marked.setOptions({ renderer });
+        function openLinksInNewTab(el) {
+            el.querySelectorAll('a[href]').forEach(a => {
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+            });
+        }
 
         let chatHistory = [];
         const progressIndicator = document.getElementById('progress-indicator');
@@ -218,6 +219,7 @@
                     content = normalizeAnswer(content);
                 }
                 newMsg.innerHTML = marked.parse(content);
+                openLinksInNewTab(newMsg);
 
                 if (msg.role === 'assistant') {
                     addToolbar(newMsg, content);
@@ -339,6 +341,7 @@
             }
 
             newMsg.innerHTML = marked.parse(content);
+            openLinksInNewTab(newMsg);
 
             if (role === 'assistant') {
                 addToolbar(newMsg, content);
