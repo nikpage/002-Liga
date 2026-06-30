@@ -94,14 +94,23 @@ async function searchGrouped(buildQuery, offset, limit) {
     return { documents: page, total: groups.length };
 }
 
+// Apply an optional created_at date range. `to` is inclusive of the whole day.
+function applyRange(q, from, to) {
+    if (from) q = q.gte('created_at', from);
+    if (to) q = q.lte('created_at', to + 'T23:59:59.999');
+    return q;
+}
+
 // offset/limit are document-based here (one "row" = one document).
-exports.listChunks = async (search, offset = 0, limit = 50, filters = []) => {
+exports.listChunks = async (search, offset = 0, limit = 50, filters = [], range = {}) => {
     const orFilter = buildOrFilter(filters);
+    const { from, to } = range;
     if (search) {
         // Typo-tolerant fuzzy search via the pg_trgm-backed DB function.
         const res = await searchGrouped(() => {
             let fq = supabase.rpc('search_chunks_fuzzy', { search_text: search }).select(CHUNK_COLS).limit(2000);
             if (orFilter) fq = fq.or(orFilter);
+            fq = applyRange(fq, from, to);
             return fq;
         }, offset, limit);
         if (!res.error) return res;
@@ -109,6 +118,7 @@ exports.listChunks = async (search, offset = 0, limit = 50, filters = []) => {
         const res2 = await searchGrouped(() => {
             let q = supabase.from(TABLE).select(CHUNK_COLS).order('created_at', { ascending: false }).ilike('content', `%${search}%`).limit(2000);
             if (orFilter) q = q.or(orFilter);
+            q = applyRange(q, from, to);
             return q;
         }, offset, limit);
         if (!res2.error) return res2;
@@ -124,6 +134,63 @@ exports.listChunks = async (search, offset = 0, limit = 50, filters = []) => {
     const { data, error, count } = await q;
     if (error) throw error;
     return { documents: [], chunks: data || [], total: count };
+};
+
+// Default browse: documents added/changed in the last `days`, newest first,
+// grouped and paginated by document. No search term needed — this is what the
+// user sees when they open the tab.
+exports.listRecentDocuments = async (offset = 0, limit = 20, filters = [], days = 30) => {
+    const orFilter = buildOrFilter(filters);
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    return searchGrouped(() => {
+        let q = supabase.from(TABLE).select(CHUNK_COLS)
+            .gte('created_at', since)
+            .order('created_at', { ascending: false })
+            .limit(2000);
+        if (orFilter) q = q.or(orFilter);
+        return q;
+    }, offset, limit);
+};
+
+// Recycle bin: documents deleted in the last `days` that are still gone (not
+// since restored), grouped by document so the whole thing restores in one click.
+exports.listDeletedDocuments = async (days = 30) => {
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const { data: hist, error } = await supabase.from(HISTORY)
+        .select('id, chunk_id, content, document_title, source_url, source, audience, created_at')
+        .eq('action', 'delete')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!hist || !hist.length) return { documents: [] };
+    // One row per chunk_id: the newest delete snapshot.
+    const newest = new Map();
+    for (const h of hist) if (!newest.has(h.chunk_id)) newest.set(h.chunk_id, h);
+    const ids = [...newest.keys()];
+    const { data: alive } = await supabase.from(TABLE).select('id').in('id', ids);
+    const aliveSet = new Set((alive || []).map(r => r.id));
+    const gone = [...newest.values()].filter(h => !aliveSet.has(h.chunk_id));
+    // Group deleted pieces into documents (by URL base, else title/id).
+    const byKey = new Map();
+    for (const h of gone) {
+        const base = (h.source_url || '').split('#')[0];
+        const key = base || (h.document_title ? 'title:' + h.document_title : 'id:' + h.chunk_id);
+        let g = byKey.get(key);
+        if (!g) { g = { key, source_url: base || null, document_title: h.document_title || null, audience: h.audience, source: h.source, deleted_at: h.created_at, pieces: [] }; byKey.set(key, g); }
+        g.pieces.push({ chunk_id: h.chunk_id, history_id: h.id });
+        if (h.created_at > g.deleted_at) g.deleted_at = h.created_at;
+    }
+    return { documents: [...byKey.values()] };
+};
+
+// Restore every deleted piece of one document from its newest delete snapshot.
+exports.restoreDeletedDocument = async (pieces) => {
+    let restored = 0;
+    for (const p of (pieces || [])) {
+        await exports.restoreChunk(p.chunk_id, p.history_id);
+        restored++;
+    }
+    return { restored };
 };
 
 exports.getChunk = async (id) => {
