@@ -157,6 +157,13 @@ Pokud není slyšet nic, type="silent".`;
     try { parsed = JSON.parse(raw); } catch { return { type: 'silent' }; }
 
     const transcript = String(parsed.transcript || '').trim();
+    // Gemini intermittently labels SUNG lyrics as "speech" and transcribes them.
+    // Liga's spoken content is Czech, so a "speech" transcript with no Czech
+    // diacritics that reads as English is a song — reclassify it as music so the
+    // lyrics are never stored as if they were narration.
+    if (parsed.type === 'speech' && transcript && isForeignSong(transcript)) {
+      return { type: 'music', song: String(parsed.song || '').trim(), artist: String(parsed.artist || '').trim() };
+    }
     if (parsed.type === 'speech' && transcript) return { type: 'speech', transcript };
     if (parsed.type === 'music') {
       return { type: 'music', song: String(parsed.song || '').trim(), artist: String(parsed.artist || '').trim() };
@@ -174,6 +181,16 @@ Pokud není slyšet nic, type="silent".`;
 // Strips any block this script previously appended (transcript / music ref /
 // link), leaving just the original post caption — so re-runs rebuild cleanly
 // instead of stacking duplicates.
+// True when a transcript is almost certainly foreign-language song lyrics rather
+// than Czech narration: it carries no Czech-specific diacritics yet reads as
+// English. Conservative (needs BOTH signals) so real Czech speech is never lost.
+function isForeignSong(t) {
+  const s = String(t || '');
+  const hasCzech = /[ěščřžýáíéůúňťďĚŠČŘŽÝÁÍÉŮÚŇŤĎ]/.test(s);
+  const looksEnglish = /\b(the|I'm|you|your|world|love|never|gonna|baby|night|waiting|dreaming|ooh|yeah|girl|heart)\b/i.test(s);
+  return !hasCzech && looksEnglish;
+}
+
 function baseCaption(content) {
   const s = String(content || '');
   const markers = [`\n\n${MARKER}`, '\n\nHudba ve videu:', '\n\nOdkaz na video:'];
