@@ -613,11 +613,36 @@ function adminError(res, e, action) {
 
 app.get('/api/admin/chunks', async (req, res) => {
     try {
-        const { search, offset, limit, filters } = req.query;
+        const { search, offset, limit, filters, from, to } = req.query;
         const filterArr = filters ? String(filters).split(',').filter(Boolean) : [];
-        const result = await adminChunks.listChunks(search, parseInt(offset) || 0, parseInt(limit) || 50, filterArr);
+        const result = await adminChunks.listChunks(search, parseInt(offset) || 0, parseInt(limit) || 50, filterArr, { from, to });
         res.json(result);
     } catch (e) { adminError(res, e, 'list'); }
+});
+
+// Default browse: most-recently added/changed documents (last 30 days).
+app.get('/api/admin/documents/recent', async (req, res) => {
+    try {
+        const { offset, limit, filters, days } = req.query;
+        const filterArr = filters ? String(filters).split(',').filter(Boolean) : [];
+        const result = await adminChunks.listRecentDocuments(parseInt(offset) || 0, parseInt(limit) || 20, filterArr, parseInt(days) || 30);
+        res.json(result);
+    } catch (e) { adminError(res, e, 'recent'); }
+});
+
+// Recycle bin: documents deleted in the last 30 days, still recoverable.
+app.get('/api/admin/documents/deleted', async (req, res) => {
+    try {
+        const result = await adminChunks.listDeletedDocuments(parseInt(req.query.days) || 30);
+        res.json(result);
+    } catch (e) { adminError(res, e, 'deleted'); }
+});
+
+app.post('/api/admin/documents/restore', async (req, res) => {
+    try {
+        const result = await adminChunks.restoreDeletedDocument(req.body.pieces);
+        res.json(result);
+    } catch (e) { adminError(res, e, 'restore-document'); }
 });
 
 app.get('/api/admin/chunks/:id', async (req, res) => {

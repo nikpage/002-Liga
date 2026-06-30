@@ -135,12 +135,16 @@
     <!-- Knowledge base tab -->
     <div class="tab-panel" id="tab-kb">
         <div class="header" style="margin-bottom:14px">
-            <div><h1>Znalostní báze</h1></div>
-            <button class="btn-add" onclick="kbOpenCreate()">+ Nový záznam</button>
+            <div><h1>Dokumenty</h1></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn-ghost" onclick="kbOpenTrash()">Koš</button>
+                <button class="btn-add" onclick="kbOpenCreate()">+ Nový dokument</button>
+            </div>
         </div>
         <div class="kb-toolbar">
-            <input type="text" id="kbSearch" placeholder="Hledat v obsahu… (min. 2 znaky)" />
-            <button class="btn-ghost" onclick="kbLoad()">Hledat</button>
+            <input type="text" id="kbSearch" placeholder="Hledat… (min. 2 znaky)" />
+            <button class="btn-ghost" onclick="kbDoSearch()">Hledat</button>
+            <button class="btn-ghost" onclick="kbClearSearch()">Zrušit hledání</button>
             <span class="kb-total" id="kbTotal"></span>
         </div>
         <div class="kb-filters" style="margin:8px 0 4px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
@@ -148,6 +152,10 @@
             <label style="font-size:14px;cursor:pointer"><input type="checkbox" class="kb-filter" value="poradna" checked onchange="kbOnFilterChange()"> Poradna</label>
             <label style="font-size:14px;cursor:pointer"><input type="checkbox" class="kb-filter" value="web" checked onchange="kbOnFilterChange()"> Liga Web</label>
             <label style="font-size:14px;cursor:pointer"><input type="checkbox" class="kb-filter" value="fb" checked onchange="kbOnFilterChange()"> Liga FB</label>
+            <span style="color:#666;font-size:13px;margin-left:8px">Od:</span>
+            <input type="date" id="kbFrom" onchange="kbOnFilterChange()" style="padding:4px 6px;border:1px solid #ccc;border-radius:6px;font-size:13px" />
+            <span style="color:#666;font-size:13px">Do:</span>
+            <input type="date" id="kbTo" onchange="kbOnFilterChange()" style="padding:4px 6px;border:1px solid #ccc;border-radius:6px;font-size:13px" />
         </div>
         <div class="table-wrap">
             <table class="kb-table">
@@ -159,7 +167,7 @@
                     </tr>
                 </thead>
                 <tbody id="kbTbody">
-                    <tr><td colspan="3" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>
+                    <tr><td colspan="3" class="loading" style="color:#bbb">Načítám…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -207,7 +215,7 @@
     <!-- History Modal -->
     <div class="overlay" id="kbHistoryOverlay">
         <div class="modal">
-            <h2>Vrátit zpět (historie verzí)</h2>
+            <h2>Historie verzí</h2>
             <div id="kbHistoryContent"><span class="spinner"></span></div>
             <div class="modal-footer">
                 <button class="btn-ghost" onclick="kbCloseModal('kbHistoryOverlay')">Zavřít</button>
@@ -218,25 +226,37 @@
     <!-- Replacement Choice Modal -->
     <div class="overlay" id="kbReplaceOverlay">
         <div class="modal">
-            <h2>Možná novější verze</h2>
+            <h2>Dokument už existuje</h2>
             <p id="kbReplaceMsg" style="margin:12px 0;color:#333"></p>
-            <p style="margin:12px 0;color:#777;font-size:13px">Obě volby jsou 100% vratné — vše se ukládá do historie a lze kdykoli obnovit.</p>
+            <p style="margin:12px 0;color:#777;font-size:13px">Nic se neztratí — vše se zálohuje a lze obnovit z Koše.</p>
             <div class="modal-footer">
                 <button class="btn-ghost" id="kbReplaceCancel">Zrušit</button>
-                <button class="btn-ghost" id="kbReplaceAdd">Přidat jako nový (ponechat oba)</button>
-                <button class="btn-danger" id="kbReplaceReplace">Nahradit starší verzi</button>
+                <button class="btn-ghost" id="kbReplaceAdd">Ponechat obě</button>
+                <button class="btn-danger" id="kbReplaceReplace">Nahradit</button>
             </div>
         </div>
     </div>
 
-    <!-- Delete Confirm Modal -->
-    <div class="overlay" id="kbDeleteOverlay">
+    <!-- Document view / patch Modal -->
+    <div class="overlay" id="kbDocOverlay">
         <div class="modal">
-            <h2>Smazat záznam?</h2>
-            <p style="margin:12px 0;color:#555">Před smazáním se uloží záloha do historie — lze obnovit.</p>
+            <h2 id="kbDocTitle">Dokument</h2>
+            <div id="kbDocLink" style="margin-bottom:10px;font-size:0.85em"></div>
+            <p style="margin:0 0 12px;color:#777;font-size:13px">Tento text pochází ze zdroje (web). Správná oprava je upravit zdroj a načíst znovu. Ruční úpravu použijte jen na rychlou opravu překlepu nebo kontaktu.</p>
+            <div id="kbDocPieces"></div>
             <div class="modal-footer">
-                <button class="btn-ghost" onclick="kbCloseModal('kbDeleteOverlay')">Zrušit</button>
-                <button class="btn-danger" id="kbConfirmDeleteBtn">Smazat</button>
+                <button class="btn-ghost" onclick="kbCloseModal('kbDocOverlay')">Zavřít</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trash (recycle bin) Modal -->
+    <div class="overlay" id="kbTrashOverlay">
+        <div class="modal">
+            <h2>Koš — odstraněné dokumenty (30 dní)</h2>
+            <div id="kbTrashContent"><span class="spinner"></span></div>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="kbCloseModal('kbTrashOverlay')">Zavřít</button>
             </div>
         </div>
     </div>
@@ -439,13 +459,17 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + name).classList.add('active');
             document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
+            // Load the document list the first time the tab is opened.
+            if (name === 'kb' && !kbLoadedOnce) { kbLoadedOnce = true; kbLoad(); }
         }
 
         // ── Knowledge base ───────────────────────────────────────────────────────
         let kbPage = 0;
         let kbResults = [];
-        const KB_PAGE_SIZE = 50;
+        let kbTrash = [];
+        let kbPageSize = 20;
         let kbEditingId = null;
+        let kbLoadedOnce = false;
 
         async function kbApi(method, path, body) {
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -466,6 +490,7 @@
 
         function showToast(msg, isError) {
             const el = document.getElementById('toast');
+            el.style.pointerEvents = 'none';
             el.textContent = msg;
             el.style.background = isError ? '#cc0000' : '#222';
             el.classList.add('show');
@@ -473,8 +498,8 @@
         }
 
         function kbAudTag(aud) {
-            if (aud === 'public_web') return '<span class="aud-tag aud-public">public</span>';
-            if (aud === 'poradna_internal') return '<span class="aud-tag aud-poradna">poradna</span>';
+            if (aud === 'public_web') return '<span class="aud-tag aud-public">Veřejné</span>';
+            if (aud === 'poradna_internal') return '<span class="aud-tag aud-poradna">Poradna</span>';
             return `<span class="aud-tag aud-other">${aud || '–'}</span>`;
         }
 
@@ -483,25 +508,40 @@
             return new Date(d).toLocaleDateString('cs-CZ');
         }
 
+        // Two modes: default browse (most recent documents) and search. Both are
+        // grouped by document, filtered by source, and bounded by the date range.
+        function kbDoSearch() { kbPage = 0; kbLoad(); }
+        function kbClearSearch() {
+            document.getElementById('kbSearch').value = '';
+            document.getElementById('kbFrom').value = '';
+            document.getElementById('kbTo').value = '';
+            kbPage = 0; kbLoad();
+        }
+
         async function kbLoad() {
             const search = document.getElementById('kbSearch').value.trim();
+            const from = document.getElementById('kbFrom').value;
+            const to = document.getElementById('kbTo').value;
+            const searching = search.length >= 2;
             const tbody = document.getElementById('kbTbody');
-            if (search.length < 2) {
-                tbody.innerHTML = '<tr><td colspan="3" class="loading" style="color:#bbb">Zadejte hledaný výraz a stiskněte Enter.</td></tr>';
-                document.getElementById('kbTotal').textContent = '';
-                document.getElementById('kbPagination').innerHTML = '';
-                return;
-            }
             tbody.innerHTML = '<tr><td colspan="3" class="loading"><span class="spinner"></span></td></tr>';
             try {
                 const filters = kbSelectedFilters().join(',');
-                const { documents, total } = await kbApi('GET', `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * KB_PAGE_SIZE}&limit=${KB_PAGE_SIZE}&filters=${encodeURIComponent(filters)}`);
+                const pageSize = searching ? 50 : 20;
+                const dateQ = `${from ? '&from=' + from : ''}${to ? '&to=' + to : ''}`;
+                const url = searching
+                    ? `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * pageSize}&limit=${pageSize}&filters=${encodeURIComponent(filters)}${dateQ}`
+                    : `/api/admin/documents/recent?offset=${kbPage * pageSize}&limit=${pageSize}&filters=${encodeURIComponent(filters)}`;
+                const { documents, total } = await kbApi('GET', url);
                 kbResults = documents || [];
-                document.getElementById('kbTotal').textContent = `Celkem: ${total} dokumentů`;
+                kbPageSize = pageSize;
+                document.getElementById('kbTotal').textContent = searching
+                    ? `Nalezeno: ${total} dokumentů`
+                    : `Naposledy přidané (30 dní): ${total}`;
                 if (!kbResults.length) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="loading">Žádné dokumenty</td></tr>';
+                    tbody.innerHTML = `<tr><td colspan="3" class="loading">${searching ? 'Nic nenalezeno.' : 'Za posledních 30 dní nic nového. Hledejte výše.'}</td></tr>`;
                 } else {
-                    tbody.innerHTML = kbResults.map((doc, idx) => kbRenderDoc(doc, idx, search)).join('');
+                    tbody.innerHTML = kbResults.map((doc, idx) => kbRenderDoc(doc, idx, searching ? search : '')).join('');
                 }
                 kbRenderPagination(total);
             } catch (e) {
@@ -509,36 +549,40 @@
             }
         }
 
-        // One document = a header row (title/link/audience + whole-document delete)
-        // followed by a row per matching piece (chunk-level edit + undo-if-changed).
+        // One row per document. Actions are document-level: open the live page,
+        // open the document to view/patch its text, or remove it (recoverable).
         function kbRenderDoc(doc, idx, search) {
             const link = doc.source_url
                 ? `<a href="${escapeHtml(doc.source_url)}" target="_blank" style="color:#0066cc;word-break:break-all">${escapeHtml(doc.source_url)}</a>`
                 : '<span class="kb-meta">bez odkazu</span>';
-            const n = doc.pieces.length;
-            const head = `<tr class="kb-doc-head"><td colspan="3" style="background:#f3f4f6;border-top:2px solid #d0d4da;padding:10px 12px">
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <strong>${escapeHtml(doc.document_title || 'Bez názvu')}</strong>
-    ${kbAudTag(doc.audience)}
-    <button class="btn-danger btn-sm" style="margin-left:auto" onclick="kbDeleteDocument(${idx})">Smazat dokument</button>
-  </div>
-  <div style="margin-top:3px">${link}</div>
-</td></tr>`;
-            const pieces = doc.pieces.map(p => {
-                const snip = kbSnippetHtml(p.content, search);
-                return `<tr>
+            // Preview: in search mode show the best matching piece; otherwise the start.
+            let preview = '', date = doc.pieces[0] && doc.pieces[0].created_at;
+            if (search) {
+                let chosen = null;
+                for (const p of doc.pieces) {
+                    const s = kbSnippetHtml(p.content, search);
+                    if (s.matched) { chosen = s.html; break; }
+                }
+                preview = chosen || kbSnippetHtml(doc.pieces[0].content, search).html;
+            } else {
+                preview = escapeHtml((doc.pieces[0].content || '').slice(0, 160)) + (doc.pieces[0].content.length > 160 ? ' …' : '');
+            }
+            return `<tr>
   <td class="kb-content">
-    <div class="kb-preview" id="kbprev-${p.id}" onclick="kbTogglePreview(${p.id})">${snip.html}</div>
-    ${snip.matched ? '' : '<div class="kb-meta"><span class="kb-loose">⚠ volná shoda</span></div>'}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:3px">
+      <strong>${escapeHtml(doc.document_title || 'Bez názvu')}</strong>
+      ${kbAudTag(doc.audience)}
+    </div>
+    <div class="kb-preview">${preview}</div>
+    <div class="kb-meta" style="margin-top:3px">${link}</div>
   </td>
-  <td style="white-space:nowrap">${kbFmtDate(p.created_at)}</td>
+  <td style="white-space:nowrap">${kbFmtDate(date)}</td>
   <td class="kb-actions">
-    <button class="btn-ghost btn-sm" onclick="kbOpenEdit(${p.id})">Upravit</button>
-    ${p.has_history ? `<button class="btn-ghost btn-sm" onclick="kbOpenHistory(${p.id})">Vrátit zpět</button>` : ''}
+    ${doc.source_url ? `<a class="btn-ghost btn-sm" href="${escapeHtml(doc.source_url)}" target="_blank" style="text-decoration:none">Otevřít stránku</a>` : ''}
+    <button class="btn-ghost btn-sm" onclick="kbOpenDoc(${idx})">Upravit</button>
+    <button class="btn-danger btn-sm" onclick="kbDeleteDocument(${idx})">Odstranit</button>
   </td>
 </tr>`;
-            }).join('');
-            return head + pieces;
         }
 
         function kbFindPiece(id) {
@@ -552,17 +596,31 @@
         async function kbDeleteDocument(idx) {
             const doc = kbResults[idx];
             if (!doc) return;
-            if (!doc.source_url) { showToast('Dokument bez odkazu nelze hromadně smazat.', true); return; }
-            if (!confirm(`Smazat celý dokument „${doc.document_title || doc.source_url}"? Vše se uloží do historie — lze obnovit.`)) return;
+            if (!doc.source_url) { showToast('Dokument bez odkazu nelze odstranit.', true); return; }
+            if (!confirm(`Odstranit dokument „${doc.document_title || doc.source_url}"? Přesune se do Koše a lze ho vrátit.`)) return;
+            const url = doc.source_url;
             try {
-                const r = await kbApi('POST', '/api/admin/documents/delete', { url: doc.source_url });
-                showToast(`Dokument smazán (${r.deleted} částí, lze obnovit).`);
+                await kbApi('POST', '/api/admin/documents/delete', { url });
+                kbActionToast('Dokument odstraněn.', 'Zpět', () => kbUndoDelete(url));
+                kbLoad();
+            } catch (e) { showToast(e.message, true); }
+        }
+
+        // Instant "Zpět" after a delete: find the document in the Koš and restore it.
+        async function kbUndoDelete(url) {
+            try {
+                const { documents } = await kbApi('GET', '/api/admin/documents/deleted');
+                const base = url.split('#')[0];
+                const d = (documents || []).find(x => x.source_url === base);
+                if (!d) { showToast('Dokument se v Koši nenašel.', true); return; }
+                await kbApi('POST', '/api/admin/documents/restore', { pieces: d.pieces });
+                showToast('Dokument vrácen.');
                 kbLoad();
             } catch (e) { showToast(e.message, true); }
         }
 
         function kbRenderPagination(total) {
-            const pages = Math.ceil(total / KB_PAGE_SIZE);
+            const pages = Math.ceil(total / kbPageSize);
             const el = document.getElementById('kbPagination');
             if (pages <= 1) { el.innerHTML = ''; return; }
             let html = '';
@@ -583,16 +641,15 @@
         // 'add' | 'replace' | null (cancelled).
         function kbAskReplace(candidate) {
             return new Promise(resolve => {
-                const pct = Math.round((candidate.similarity || 0) * 100);
                 const name = candidate.document_title || candidate.source_url || 'dokument';
                 const urlLine = candidate.source_url ? `<span style="color:#777">${escapeHtml(candidate.source_url)}</span><br>` : '';
                 document.getElementById('kbReplaceMsg').innerHTML = candidate.exact
                     ? 'Tento odkaz už v databázi je:<br>' +
                       `<strong>${escapeHtml(name)}</strong><br>` + urlLine +
                       'Chcete starou verzi nahradit nově načtenou?'
-                    : 'Tento záznam vypadá jako novější verze dokumentu:<br>' +
+                    : 'Vypadá to jako stejný dokument, který už máte uložený:<br>' +
                       `<strong>${escapeHtml(name)}</strong><br>` + urlLine +
-                      `Shoda obsahu: <strong>${pct} %</strong>.`;
+                      'Chcete ho nahradit, nebo ponechat obě verze?';
                 const ov = document.getElementById('kbReplaceOverlay');
                 ov.classList.add('open');
                 const done = (val) => { ov.classList.remove('open'); resolve(val); };
@@ -642,7 +699,8 @@
 
         async function kbOpenEdit(id) {
             kbEditingId = id;
-            document.getElementById('kbModalTitle').textContent = 'Upravit záznam';
+            kbCloseModal('kbDocOverlay');
+            document.getElementById('kbModalTitle').textContent = 'Upravit text';
             document.getElementById('kbModalError').textContent = '';
             document.getElementById('kbLoadStatus').textContent = '';
             document.getElementById('kbLoadRow').style.display = 'none';
@@ -845,6 +903,78 @@
                 await kbApi('POST', `/api/admin/chunks/${chunkId}/restore/${historyId}`);
                 showToast('Verze obnovena.');
                 kbCloseModal('kbHistoryOverlay');
+                kbLoad();
+            } catch (e) { showToast(e.message, true); }
+        }
+
+        // Toast with an action button (e.g. "Zpět" after a delete). Stays a bit
+        // longer than a plain toast so there's time to click it.
+        function kbActionToast(msg, label, fn) {
+            const el = document.getElementById('toast');
+            el.style.background = '#222';
+            el.style.pointerEvents = 'auto';
+            el.innerHTML = '';
+            el.appendChild(document.createTextNode(msg + '  '));
+            const b = document.createElement('button');
+            b.textContent = label;
+            b.style.cssText = 'background:#fff;color:#222;border:none;border-radius:5px;padding:3px 10px;margin-left:6px;cursor:pointer;font-weight:600;pointer-events:auto';
+            b.onclick = () => { el.classList.remove('show'); fn(); };
+            el.appendChild(b);
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 6000);
+        }
+
+        // Open one document: show its text piece-by-piece, read-only, with a link
+        // to the live page and a per-piece manual-edit / history fallback.
+        function kbOpenDoc(idx) {
+            const doc = kbResults[idx];
+            if (!doc) return;
+            document.getElementById('kbDocTitle').textContent = doc.document_title || 'Bez názvu';
+            document.getElementById('kbDocLink').innerHTML = doc.source_url
+                ? `<a href="${escapeHtml(doc.source_url)}" target="_blank" style="color:#0066cc;word-break:break-all">Otevřít živou stránku ↗</a>`
+                : '<span style="color:#999">Bez odkazu</span>';
+            const pieces = (doc.pieces || []).map(p => `<div style="border:1px solid #eee;border-radius:6px;padding:10px;margin-bottom:8px">
+  <div style="white-space:pre-wrap;font-size:0.85em;color:#333;max-height:140px;overflow:auto">${escapeHtml(p.content || '')}</div>
+  <div style="display:flex;gap:6px;margin-top:8px">
+    <button class="btn-ghost btn-sm" onclick="kbOpenEdit(${p.id})">Upravit ručně</button>
+    ${p.has_history ? `<button class="btn-ghost btn-sm" onclick="kbOpenHistory(${p.id})">Historie verzí</button>` : ''}
+  </div>
+</div>`).join('');
+            document.getElementById('kbDocPieces').innerHTML = pieces || '<p style="color:#aaa">Prázdné.</p>';
+            document.getElementById('kbDocOverlay').classList.add('open');
+        }
+
+        // Recycle bin: documents deleted in the last 30 days, restorable in one click.
+        async function kbOpenTrash() {
+            document.getElementById('kbTrashContent').innerHTML = '<span class="spinner"></span>';
+            document.getElementById('kbTrashOverlay').classList.add('open');
+            try {
+                const { documents } = await kbApi('GET', '/api/admin/documents/deleted');
+                kbTrash = documents || [];
+                if (!kbTrash.length) {
+                    document.getElementById('kbTrashContent').innerHTML = '<p style="color:#aaa">Koš je prázdný.</p>';
+                    return;
+                }
+                document.getElementById('kbTrashContent').innerHTML = kbTrash.map((d, i) => `<div class="history-item">
+  <div class="h-meta">
+    <strong>${escapeHtml(d.document_title || d.source_url || 'Bez názvu')}</strong>
+    <span style="color:#aaa">${d.deleted_at ? new Date(d.deleted_at).toLocaleString('cs-CZ') : ''}</span>
+    <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="kbRestoreTrash(${i})">Obnovit</button>
+  </div>
+  ${d.source_url ? `<div class="kb-meta">${escapeHtml(d.source_url)}</div>` : ''}
+</div>`).join('');
+            } catch (e) {
+                document.getElementById('kbTrashContent').innerHTML = `<p style="color:#cc0000">${escapeHtml(e.message)}</p>`;
+            }
+        }
+
+        async function kbRestoreTrash(i) {
+            const d = kbTrash[i];
+            if (!d) return;
+            try {
+                await kbApi('POST', '/api/admin/documents/restore', { pieces: d.pieces });
+                showToast('Dokument obnoven.');
+                kbCloseModal('kbTrashOverlay');
                 kbLoad();
             } catch (e) { showToast(e.message, true); }
         }
