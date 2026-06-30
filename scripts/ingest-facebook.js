@@ -19,6 +19,7 @@ const AUDIENCE = 'public_web';      // Liga's own posts are public
 const SOURCE = 'facebook';          // lets us rebuild only FB rows without touching the website rows
 const MIN_CHARS = 100;              // drop thin posts (same threshold as the site ingest)
 const HIGHLIGHT_DAYS = 30;          // "NEW" window for service announcements
+const FETCH_MONTHS = 24;            // how far back to fetch posts (avoids FB deep-pagination errors)
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -77,9 +78,11 @@ async function resolvePage() {
 
 async function getAllPosts(pageId) {
   const posts = [];
+  const sinceTs = Math.floor((Date.now() - FETCH_MONTHS * 30 * 24 * 3600 * 1000) / 1000);
   let url = build(`${pageId}/posts`, {
     fields: 'id,created_time,message,permalink_url,attachments{type,target{id}},comments.summary(true).limit(0)',
-    limit: '100'
+    limit: '100',
+    since: String(sinceTs),
   });
   while (url) {
     const page = await getJson(url);
@@ -271,16 +274,16 @@ function buildPostRow(p, subtitleText) {
 // tell what's new/changed/unchanged without re-reading embeddings. Paged to get
 // past the default row cap.
 async function loadExisting() {
-  const existing = new Map();
+  const existing = new Map(); // source_url -> { content, event_date }
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('chunks')
-      .select('source_url, content')
+      .select('source_url, content, event_date')
       .eq('source', SOURCE)
       .range(from, from + PAGE - 1);
     if (error) throw error;
-    for (const r of data || []) existing.set(r.source_url, r.content);
+    for (const r of data || []) existing.set(r.source_url, { content: r.content, event_date: r.event_date });
     if (!data || data.length < PAGE) break;
   }
   return existing;
@@ -380,9 +383,13 @@ async function main() {
   const existing = await loadExisting();
   const candUrls = new Set(candidates.map(c => c.source_url));
   const newRows = candidates.filter(c => !existing.has(c.source_url));
-  const changedRows = candidates.filter(c => existing.has(c.source_url) && existing.get(c.source_url) !== c.content);
+  const changedRows = candidates.filter(c => existing.has(c.source_url) && existing.get(c.source_url).content !== c.content);
   const unchanged = candidates.length - newRows.length - changedRows.length;
-  const orphans = [...existing.keys()].filter(u => !candUrls.has(u)); // removed on FB
+  // Only flag as orphan if within our fetch window — older rows were simply not fetched, not deleted.
+  const sinceMs = Date.now() - FETCH_MONTHS * 30 * 24 * 3600 * 1000;
+  const orphans = [...existing.entries()]
+    .filter(([u, row]) => !candUrls.has(u) && (!row.event_date || new Date(row.event_date).getTime() >= sinceMs))
+    .map(([u]) => u);
 
   console.log(`Diff vs DB (${existing.size} stored): ${newRows.length} new, ${changedRows.length} changed, ${unchanged} unchanged, ${orphans.length} to remove.`);
 
