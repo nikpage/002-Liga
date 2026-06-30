@@ -33,6 +33,24 @@
 - **Tags** (`poradna_internal`, `public_web`, more to come) route the response *path* (which prompt) and internal bookkeeping — not data access.
 - **eWay Journal save is source-driven, not tag-driven** (`search.js`): the answer is saved to eWay when it CITES a poradna source (any cited chunk with `audience === 'poradna_internal'`). Public-only answers are never saved. Mixed-source answers get poradna treatment (saved), because poradna answers are legally/grant-relevant and human-checked. See `eway-crm.js`.
 
+## Admin page (`/admin`, served from `admin.html`)
+Single-page admin with two tabs. UI is `admin.html`; KB data logic is `admin-chunks.js`; URL extraction is `fetch-extract.js`; routes are the `/api/admin/*` and `/api/qa-logs` handlers in `server.js`. **No auth layer** — access is by knowing the URL.
+
+### Tab 1 — Q&A Log (read-only)
+- Lists logged Q&A from the `qa_logs` table (`getQALogs` in `database.js`, written by `logQA`). `GET /api/qa-logs` (limit ≤ 5000). Shows #, date (cs-CZ), question, answer (Markdown-rendered, long answers collapsible).
+- **Export to Excel** via SheetJS (`XLSX`, CDN) → `qa-log-<date>.xlsx`. No editing here; it's a viewer + export.
+
+### Tab 2 — Znalostní báze (Knowledge Base — document management)
+Manages rows in the `chunks` table. **A "document" = all chunks sharing a `source_url`** (base part before any `#anchor`); manual entries with no URL group by title/id (`groupDocuments`).
+- **Search:** typo-tolerant, diacritic-insensitive fuzzy search via the pg_trgm-backed `search_chunks_fuzzy` RPC, with an exact `ilike` fallback if the function isn't installed (`listChunks`). Min 2 chars. Results are **grouped by document**, paginated **by document** (50/page). The UI highlights *why* each piece matched (client-side trigram scoring).
+- **Source filters:** Poradna (`audience=poradna_internal`), Liga Web (`source=web`), Liga FB (`source=facebook`). All or none checked = no filter (`buildOrFilter`).
+- **Add (`+ Nový záznam`) — URL-only, source-driven:** paste a URL; the server fetches it (`/api/admin/fetch-url` → `fetch-extract.js`), auto-detecting **HTML, PDF (`pdf-parse`), or Word `.docx` (`mammoth`)**, stripping page chrome and pulling YouTube captions for HTML. Text is cleaned (NUL/control chars stripped — PostgreSQL can't store NUL), chunked (~800 chars, ~100 overlap, same as the ingestion scripts), embedded per piece, and saved — with **live SSE progress** (chunking → embedding counter) via `POST /api/admin/chunks/stream`. New docs are stored as `source='web'`, `audience='public_web'`.
+- **Duplicate handling (two stages):** (1) **same-URL check BEFORE fetch/embed** (`/api/admin/chunks/check-url` → `findByUrl`) so a straight re-add costs nothing if the user backs out; (2) **fuzzy near-duplicate check after embedding** for a *different* URL with ≥0.88 content similarity (`/check-replacement` → `findReplacementCandidate`). Either offers Replace / keep both / Cancel. **Replace ordering matters:** same-URL replace deletes the old copy *before* inserting (deleting after would wipe the new rows); different-URL replace inserts first then deletes the old (so a failed insert never loses the existing doc).
+- **Edit (`Upravit`) — per chunk:** edit content/title/url/source/audience/event dates (`PUT /api/admin/chunks/:id` → `updateChunk`). Re-embeds only if content changed; no-op (no history row) if nothing changed.
+- **Delete document (`Smazat dokument`) — per document:** removes every piece of the doc (`/api/admin/documents/delete` → `deleteDocument`); each piece is saved to history first, so it's recoverable.
+- **Undo / history (`Vrátit zpět`) — per chunk:** shown only when a chunk has history (`enrichHistory`). Lists snapshots newest-first with action (`edit`/`delete`) + timestamp; Restore copies a snapshot back, **recreating the chunk if it had been deleted** (`/chunks/:id/restore/:historyId` → `restoreChunk`).
+- **Versioning model:** history lives in `chunk_history`, keyed by **individual `chunk_id`** (not by document) — there is **no version number** and no document-level "restore to version N"; snapshots are distinguished by `created_at` + `action`. Capped at `MAX_HISTORY = 5` per chunk; the live/current state is in `chunks`, not history. A snapshot is written *before* each edit/delete (holds the pre-change state).
+
 ## Events
 - **Recurring events** (`events.js`): the next DOBROklub date is computed in code from the "každý druhý čtvrtek v měsíci" recurrence rule, with Czech public-holiday checking (fixed dates + Easter). Injected into the prompt as an authoritative "COMPUTED UPCOMING EVENT" block so event questions never fail on phrasing.
 - **`getFullContext` always injects** the recurrence-rule chunk and any currently-active `highlight_until` chunks, regardless of vector rank, so evergreen/active event info is never crowded out.
@@ -58,6 +76,9 @@
 - `scripts/ingest-facebook.js`: Incremental FB ingestion (events + posts + Liga event-comments); run daily by the cron in `server.js`.
 - `scripts/ingest-public.js`: Website (sitemap) ingestion into `chunks`.
 - `config.js`: Central configuration for API keys and models.
+- `admin.html`: Admin SPA — Q&A Log tab (viewer + Excel export) and Znalostní báze tab (KB document management UI).
+- `admin-chunks.js`: KB document-management DB logic (grouped search, create/edit/delete, duplicate detection, per-chunk history/restore).
+- `fetch-extract.js`: Fetches a URL and extracts readable text for manual ingestion — HTML (chrome-stripped + YouTube captions), PDF (`pdf-parse`), Word `.docx` (`mammoth`).
 
 ## Code Style & Constraints
 - **Strict No-Refactor:** Do not refactor, clean up, or simplify code unless explicitly instructed.
