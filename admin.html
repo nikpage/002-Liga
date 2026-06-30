@@ -520,7 +520,6 @@
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <strong>${escapeHtml(doc.document_title || 'Bez názvu')}</strong>
     ${kbAudTag(doc.audience)}
-    <span class="kb-meta">${n} ${n === 1 ? 'část' : (n < 5 ? 'části' : 'částí')}</span>
     <button class="btn-danger btn-sm" style="margin-left:auto" onclick="kbDeleteDocument(${idx})">Smazat dokument</button>
   </div>
   <div style="margin-top:3px">${link}</div>
@@ -530,7 +529,7 @@
                 return `<tr>
   <td class="kb-content">
     <div class="kb-preview" id="kbprev-${p.id}" onclick="kbTogglePreview(${p.id})">${snip.html}</div>
-    <div class="kb-meta">ID: ${p.id}${snip.matched ? '' : ' · <span class="kb-loose">⚠ volná shoda</span>'}</div>
+    ${snip.matched ? '' : '<div class="kb-meta"><span class="kb-loose">⚠ volná shoda</span></div>'}
   </td>
   <td style="white-space:nowrap">${kbFmtDate(p.created_at)}</td>
   <td class="kb-actions">
