@@ -655,8 +655,13 @@ app.post('/api/admin/chunks/check-replacement', async (req, res) => {
 app.post('/api/admin/chunks', async (req, res) => {
     try {
         const { replace_url, ...fields } = req.body;
+        const sameUrl = replace_url && replace_url === (fields.source_url || '').split('#')[0];
+        // Same URL: delete the old copy first, else it would also remove the
+        // rows we are about to insert. Different URL: insert first, then drop
+        // the old version, so a failed insert never loses the existing doc.
+        if (sameUrl) await adminChunks.deleteDocument(replace_url);
         const created = await adminChunks.createChunk(fields);
-        if (replace_url) await adminChunks.deleteDocument(replace_url);
+        if (replace_url && !sameUrl) await adminChunks.deleteDocument(replace_url);
         res.json(created);
     } catch (e) { adminError(res, e, 'create'); }
 });
@@ -675,8 +680,16 @@ app.post('/api/admin/chunks/stream', async (req, res) => {
     const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
     try {
         const { replace_url, ...fields } = req.body;
+        const sameUrl = replace_url && replace_url === (fields.source_url || '').split('#')[0];
+        // Same URL: delete the old copy first, else it would also remove the
+        // rows we are about to insert. Different URL: insert first, then drop
+        // the old version, so a failed insert never loses the existing doc.
+        if (sameUrl) {
+            send({ phase: 'replacing' });
+            await adminChunks.deleteDocument(replace_url);
+        }
         const created = await adminChunks.createChunk(fields, (p) => send(p));
-        if (replace_url) {
+        if (replace_url && !sameUrl) {
             send({ phase: 'replacing' });
             await adminChunks.deleteDocument(replace_url);
         }

@@ -586,11 +586,14 @@
             return new Promise(resolve => {
                 const pct = Math.round((candidate.similarity || 0) * 100);
                 const name = candidate.document_title || candidate.source_url || 'dokument';
-                document.getElementById('kbReplaceMsg').innerHTML =
-                    'Tento záznam vypadá jako novější verze dokumentu:<br>' +
-                    `<strong>${escapeHtml(name)}</strong><br>` +
-                    (candidate.source_url ? `<span style="color:#777">${escapeHtml(candidate.source_url)}</span><br>` : '') +
-                    `Shoda obsahu: <strong>${pct} %</strong>.`;
+                const urlLine = candidate.source_url ? `<span style="color:#777">${escapeHtml(candidate.source_url)}</span><br>` : '';
+                document.getElementById('kbReplaceMsg').innerHTML = candidate.exact
+                    ? 'Tento odkaz už v databázi je:<br>' +
+                      `<strong>${escapeHtml(name)}</strong><br>` + urlLine +
+                      'Chcete starou verzi nahradit nově načtenou?'
+                    : 'Tento záznam vypadá jako novější verze dokumentu:<br>' +
+                      `<strong>${escapeHtml(name)}</strong><br>` + urlLine +
+                      `Shoda obsahu: <strong>${pct} %</strong>.`;
                 const ov = document.getElementById('kbReplaceOverlay');
                 ov.classList.add('open');
                 const done = (val) => { ov.classList.remove('open'); resolve(val); };
