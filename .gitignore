@@ -2,6 +2,15 @@ node_modules/
 fb-video-scan-output.txt
 fb-scan-output.txt
 
+# Logs & scratch output (can contain API keys echoed in error URLs)
+*.log
+scratchpad*
+scratchpad_*.js
+*-output.txt
+.env.recovered
+fb-token.local
+fb-token-steps.txt
+
 # Local Netlify folder
 .netlify
 .venv
