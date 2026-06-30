@@ -76,13 +76,12 @@ async function resolvePage() {
   return page;
 }
 
-async function getAllPosts(pageId) {
+async function getAllPosts(pageId, sinceMs) {
   const posts = [];
-  const sinceTs = Math.floor((Date.now() - FETCH_MONTHS * 30 * 24 * 3600 * 1000) / 1000);
   let url = build(`${pageId}/posts`, {
     fields: 'id,created_time,message,permalink_url,attachments{type,target{id}},comments.summary(true).limit(0)',
     limit: '100',
-    since: String(sinceTs),
+    since: String(Math.floor(sinceMs / 1000)),
   });
   while (url) {
     const page = await getJson(url);
@@ -289,12 +288,36 @@ async function loadExisting() {
   return existing;
 }
 
+// Returns the timestamp (ms) of the most recent FB post in the DB, or 0 if none.
+// Used to narrow the Graph API fetch window and avoid 900-post pagination errors.
+async function getLatestPostDate() {
+  const { data, error } = await supabase
+    .from('chunks')
+    .select('event_date')
+    .eq('source', SOURCE)
+    .not('source_url', 'ilike', 'https://www.facebook.com/events/%')
+    .not('source_url', 'ilike', '%#comment-%')
+    .order('event_date', { ascending: false })
+    .limit(1);
+  if (error || !data || !data.length || !data[0].event_date) return 0;
+  return new Date(data[0].event_date).getTime();
+}
+
 async function main() {
   if (!config.supabase.url || !config.supabase.key) throw new Error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY');
   if (!config.google.key) throw new Error('Missing GOOGLE_API_KEY');
 
   const page = await resolvePage();
-  const all = await getAllPosts(page.id);
+
+  // Use the most recent DB post date (minus 7 days) as the fetch window, so
+  // we never ask FB for more posts than we need. Falls back to FETCH_MONTHS.
+  const latestPostMs = await getLatestPostDate();
+  const defaultSinceMs = Date.now() - FETCH_MONTHS * 30 * 24 * 3600 * 1000;
+  const sinceMs = latestPostMs
+    ? Math.max(latestPostMs - 7 * 24 * 3600 * 1000, defaultSinceMs)
+    : defaultSinceMs;
+  console.log(`Fetching posts since ${new Date(sinceMs).toISOString().slice(0, 10)}...`);
+  const all = await getAllPosts(page.id, sinceMs);
   const kept = all.filter(keep);
   // de-dupe: text-only posts de-dup by message (handles reposts); video posts
   // always keep individually — each reel has unique subtitle content.
@@ -439,6 +462,43 @@ async function main() {
   }
 
   console.log(`\nDone. +${newRows.length} new, ~${changedRows.length} changed, -${orphans.length} removed (source='${SOURCE}'). ${unchanged} unchanged rows left as-is.`);
+
+  // Backfill subtitle tracks for reel rows that were ingested before the
+  // subtitle feature existed. Only touches rows still missing [Přepis videa].
+  const justWrittenUrls = new Set(toWrite.map(r => r.source_url));
+  const { data: reelRows, error: reelErr } = await supabase
+    .from('chunks')
+    .select('id, source_url, content')
+    .eq('source', SOURCE)
+    .like('source_url', '%/reel/%')
+    .not('content', 'like', '%[Přepis videa]%');
+  if (reelErr) throw reelErr;
+  const toBackfill = (reelRows || []).filter(r => !justWrittenUrls.has(r.source_url));
+  if (!toBackfill.length) return;
+
+  console.log(`Backfilling subtitles for ${toBackfill.length} existing reels...`);
+  let bUpdated = 0;
+  for (let i = 0; i < toBackfill.length; i++) {
+    const r = toBackfill[i];
+    const videoId = extractVideoId(r.source_url);
+    if (!videoId) continue;
+    const subs = await getSubtitleText(videoId);
+    await sleep(200);
+    if (!subs) continue;
+    const newContent = r.content
+      ? `${r.content}\n\n[Přepis videa]\n${subs}`
+      : `[Přepis videa]\n${subs}`;
+    const emb = await embed(newContent);
+    await sleep(120);
+    const { error: updErr } = await supabase.from('chunks')
+      .update({ content: newContent, embedding: emb })
+      .eq('id', r.id);
+    if (updErr) { console.error(`  update error for ${r.source_url}: ${updErr.message}`); continue; }
+    bUpdated++;
+    process.stdout.write(`\r  backfilled ${i + 1}/${toBackfill.length} (${bUpdated} updated)...`);
+  }
+  process.stdout.write('\n');
+  console.log(`Subtitle backfill: ${bUpdated}/${toBackfill.length} rows updated.`);
 }
 
 main().catch(err => { console.error('\nERROR:', err.message); process.exit(1); });
