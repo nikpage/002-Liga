@@ -4,6 +4,12 @@
 - **Never use the AskUserQuestion tool.** Ask clarifying questions directly in plain text.
 - **Do not discuss, refer to, or infer anything about the user, the user's feelings, or the user's state of mind in any way, shape, or form.** Stay strictly on the technical task. Do not comment on or characterize the user.
 
+## Database Safety (LIVE production DB)
+- **The Supabase DB (`chunks`, `chunk_history`) is LIVE production data serving real users. There is no casual undo.** Be extremely careful with every write/delete.
+- **Before any DELETE/UPDATE, run a SELECT with the exact same filter first**, confirm the count, and confirm every matched row is test data only. State the destructive op in one plain line before running it.
+- **Narrowest possible filter only** — never a broad `like`/`or` that could catch real rows. When unsure whether a row is real, stop and ask.
+- **Test docs:** do NOT auto-clean test docs after each test. Tag them `source_url` like `example.com/claude-*`, leave them in place to verify the deletion flow, and sweep all of them in one pass right before client delivery.
+
 ## Commands
 - **Start Server:** `npm start` or `node server.js`
 - **Install Dependencies:** `npm install`
