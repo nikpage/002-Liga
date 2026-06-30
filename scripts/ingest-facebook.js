@@ -40,8 +40,6 @@ if (!TOKEN) { console.error('Missing token. Put it in fb-token.local or set FB_T
 
 const supabase = createClient(config.supabase.url, config.supabase.key);
 
-// Posts we deliberately exclude (joke videos with the same caption — value is in the video, not text).
-const SKIP_PATTERNS = [/S úsměvem to jede líp/i];
 // Service announcements get the temporary "NEW" highlight. Must mention a
 // *service* — earlier /přichází s novou/ matched event promos like "Sexy den
 // přichází s novou energií" and wrongly highlighted them as current.
@@ -176,6 +174,47 @@ function buildEventRow(e) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Extracts the numeric video ID from a reel permalink URL.
+// Returns null for regular post URLs.
+function extractVideoId(permalinkUrl) {
+  const m = String(permalinkUrl || '').match(/\/reel\/(\d+)/);
+  return m ? m[1] : null;
+}
+
+// Downloads a VTT file and returns its text as a single plain-text string,
+// stripping timecodes and deduplicating consecutive identical cue lines.
+async function fetchVttText(vttUrl) {
+  try {
+    const res = await fetch(vttUrl);
+    const raw = await res.text();
+    const out = [];
+    let prev = '';
+    for (const line of raw.split('\n')) {
+      const l = line.trim();
+      if (!l || l === 'WEBVTT' || /^\d+$/.test(l) || /-->/.test(l) || /^[A-Z][\w-]+:/.test(l)) continue;
+      if (l !== prev) { out.push(l); prev = l; }
+    }
+    return out.join(' ').trim();
+  } catch {
+    return '';
+  }
+}
+
+// Fetches the auto-generated subtitle track for a video ID (prefers Czech).
+// Returns plain text, or '' if no captions are available.
+async function getSubtitleText(videoId) {
+  try {
+    const data = await getJson(build(`${videoId}`, { fields: 'captions' }));
+    const caps = data.captions && data.captions.data;
+    if (!caps || !caps.length) return '';
+    const cz = caps.find(c => c.locale && c.locale.startsWith('cs')) || caps[0];
+    if (!cz || !cz.uri) return '';
+    return await fetchVttText(cz.uri);
+  } catch {
+    return '';
+  }
+}
+
 // getEmb but resilient to Google's rate limit (429 / resource exhausted): back off and retry.
 async function embed(text) {
   for (let attempt = 0; attempt < 7; attempt++) {
@@ -195,9 +234,9 @@ async function embed(text) {
 
 function keep(post) {
   const text = (post.message || '').trim();
-  if (text.length < MIN_CHARS) return false;                 // no-text + thin posts
-  if (SKIP_PATTERNS.some(rx => rx.test(text))) return false; // joke videos
-  return true;
+  // Video posts (reels) may have subtitle content even with thin/boilerplate text.
+  if (extractVideoId(post.permalink_url)) return true;
+  return text.length >= MIN_CHARS;
 }
 
 function isService(text) {
@@ -206,14 +245,17 @@ function isService(text) {
 
 // Builds a post chunk row (without embedding). Posts keep event_date = post date;
 // dated events come from the Events endpoint, not captions.
-function buildPostRow(p) {
-  const text = p.message.trim();
+function buildPostRow(p, subtitleText) {
+  const postText = (p.message || '').trim();
+  const content = subtitleText
+    ? (postText ? `${postText}\n\n[Přepis videa]\n${subtitleText}` : `[Přepis videa]\n${subtitleText}`)
+    : postText;
   const createdISO = p.created_time;
-  const highlight = isService(text)
+  const highlight = isService(postText)
     ? new Date(new Date(createdISO).getTime() + HIGHLIGHT_DAYS * 86400000).toISOString()
     : null;
   return {
-    content: text,
+    content,
     document_title: `Liga vozíčkářů – Facebook (${createdISO.slice(0, 10)})`,
     source_url: p.permalink_url || `https://facebook.com/${p.id}`,
     audience: AUDIENCE,
@@ -251,17 +293,34 @@ async function main() {
   const page = await resolvePage();
   const all = await getAllPosts(page.id);
   const kept = all.filter(keep);
-  // de-dupe identical captions (reposts) — keep the most recent
+  // de-dupe: text-only posts de-dup by message (handles reposts); video posts
+  // always keep individually — each reel has unique subtitle content.
   const seen = new Set();
   const unique = [];
   for (const p of kept) {
-    const key = (p.message || '').trim();
+    const key = extractVideoId(p.permalink_url) ? `video:${p.id}` : (p.message || '').trim();
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(p);
   }
 
   console.log(`Posts: ${all.length} total -> ${kept.length} after filter -> ${unique.length} after de-dupe`);
+
+  // Fetch subtitle tracks for reel posts — the spoken content is what makes
+  // each video (especially the recurring joke series) semantically unique.
+  const subtitleMap = new Map(); // post.id -> plain-text subtitle string
+  const reelPosts = unique.filter(p => extractVideoId(p.permalink_url));
+  if (reelPosts.length) {
+    console.log(`Fetching subtitles for ${reelPosts.length} reel posts...`);
+    for (let i = 0; i < reelPosts.length; i++) {
+      const p = reelPosts[i];
+      const subs = await getSubtitleText(extractVideoId(p.permalink_url));
+      if (subs) subtitleMap.set(p.id, subs);
+      await sleep(200);
+      process.stdout.write(`\r  subtitles: ${i + 1}/${reelPosts.length} (${subtitleMap.size} found)...`);
+    }
+    process.stdout.write('\n');
+  }
 
   // Facebook Events — authoritative dated events (name + real start_time).
   // Only keep events that haven't ended yet: past events add nothing to
@@ -311,7 +370,10 @@ async function main() {
   if (commentRows.length) console.log(`Liga comments on upcoming events: ${commentRows.length}.`);
 
   // Candidate rows (no embeddings yet): events + Liga comments first, then posts.
-  const candidates = [...eventRows, ...commentRows, ...unique.map(buildPostRow)];
+  const postRows = unique
+    .map(p => buildPostRow(p, subtitleMap.get(p.id) || ''))
+    .filter(r => r.content.length >= MIN_CHARS);
+  const candidates = [...eventRows, ...commentRows, ...postRows];
 
   // Incremental diff against what's already stored — so we embed/write only the
   // delta instead of rebuilding (and re-embedding) every row each run.
