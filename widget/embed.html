@@ -171,6 +171,13 @@
     <script>
         marked.setOptions({ breaks: true });
 
+        function openLinksInNewTab(el) {
+            el.querySelectorAll('a[href]').forEach(a => {
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+            });
+        }
+
         /* API base – same origin when served from Railway */
         const API_BASE = location.origin;
 
@@ -211,6 +218,7 @@
                 let content = msg.content;
                 if (msg.role === 'assistant') content = normalizeAnswer(content);
                 newMsg.innerHTML = marked.parse(content);
+                openLinksInNewTab(newMsg);
                 if (msg.role === 'assistant') addToolbar(newMsg, content);
                 msgs.appendChild(newMsg);
             });
@@ -321,6 +329,7 @@
 
             if (role === 'assistant') content = normalizeAnswer(content, sources);
             newMsg.innerHTML = marked.parse(content);
+            openLinksInNewTab(newMsg);
             if (role === 'assistant') addToolbar(newMsg, content);
 
             msgs.appendChild(newMsg);

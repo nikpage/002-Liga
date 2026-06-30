@@ -175,13 +175,6 @@
     <script>
         marked.setOptions({ breaks: true });
 
-        function openLinksInNewTab(el) {
-            el.querySelectorAll('a[href]').forEach(a => {
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
-            });
-        }
-
         let chatHistory = [];
         const progressIndicator = document.getElementById('progress-indicator');
 
@@ -219,7 +212,6 @@
                     content = normalizeAnswer(content);
                 }
                 newMsg.innerHTML = marked.parse(content);
-                openLinksInNewTab(newMsg);
 
                 if (msg.role === 'assistant') {
                     addToolbar(newMsg, content);
@@ -341,7 +333,6 @@
             }
 
             newMsg.innerHTML = marked.parse(content);
-            openLinksInNewTab(newMsg);
 
             if (role === 'assistant') {
                 addToolbar(newMsg, content);
