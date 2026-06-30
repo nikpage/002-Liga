@@ -710,14 +710,26 @@
             const btn = document.getElementById('kbSaveBtn');
             btn.disabled = true; btn.textContent = 'Pracuji…';
             try {
+                let replaceUrl = null;
+
+                // Same URL already stored? Warn BEFORE fetching & embedding, so
+                // a straight re-add costs nothing if the user backs out.
+                status.textContent = 'Kontroluji, zda odkaz už není v databázi…';
+                const dup = await kbApi('POST', '/api/admin/chunks/check-url', { url });
+                if (dup && dup.candidate) {
+                    const choice = await kbAskReplace(dup.candidate);
+                    if (choice === null) { status.textContent = ''; return; }
+                    if (choice === 'replace') replaceUrl = dup.candidate.source_url;
+                    // 'add' => keep both, proceed
+                }
+
                 status.textContent = 'Načítám stránku…';
                 const fetched = await kbApi('POST', '/api/admin/fetch-url', { url });
                 const content = (fetched.text || '').trim();
                 if (!content) throw new Error('Na stránce se nepodařilo najít žádný text.');
 
-                // Looks like a newer version of something already stored?
+                // Looks like a newer version of a *different* stored document?
                 status.textContent = 'Kontroluji, zda už podobný záznam existuje…';
-                let replaceUrl = null;
                 const chk = await kbApi('POST', '/api/admin/chunks/check-replacement', { content, source_url: url });
                 if (chk && chk.candidate) {
                     const choice = await kbAskReplace(chk.candidate);

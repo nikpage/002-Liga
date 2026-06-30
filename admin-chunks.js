@@ -243,29 +243,29 @@ function normVal(field, v) {
 // above the threshold, or null. Fail-safe: if the DB function isn't installed,
 // returns no candidate so adding still works.
 const REPLACEMENT_MIN_SIMILARITY = 0.88;
-exports.findReplacementCandidate = async (content, sourceUrl) => {
-    // Exact same URL already stored? That's a straight duplicate (re-adding the
-    // same page), which the fuzzy check below deliberately ignores. Flag it
-    // first so the user is warned instead of silently creating a duplicate.
-    if (sourceUrl) {
-        const base = sourceUrl.split('#')[0];
-        const [exact, frag] = await Promise.all([
-            supabase.from(TABLE).select('document_title, audience, source').eq('source_url', base).limit(1),
-            supabase.from(TABLE).select('document_title, audience, source').like('source_url', `${base}#%`).limit(1)
-        ]);
-        const hit = (exact.data && exact.data[0]) || (frag.data && frag.data[0]);
-        if (hit) {
-            return { candidate: {
-                source_url: base,
-                document_title: hit.document_title || null,
-                audience: hit.audience || null,
-                source: hit.source || null,
-                similarity: 1,
-                exact: true
-            } };
-        }
-    }
+// Is this exact URL already stored? URL-only lookup (no fetch, no embedding)
+// so the add flow can warn about a straight duplicate BEFORE doing any work.
+// Returns the existing document's info as a candidate (exact: true), or null.
+exports.findByUrl = async (url) => {
+    if (!url) return { candidate: null };
+    const base = url.split('#')[0];
+    const [exact, frag] = await Promise.all([
+        supabase.from(TABLE).select('document_title, audience, source').eq('source_url', base).limit(1),
+        supabase.from(TABLE).select('document_title, audience, source').like('source_url', `${base}#%`).limit(1)
+    ]);
+    const hit = (exact.data && exact.data[0]) || (frag.data && frag.data[0]);
+    if (!hit) return { candidate: null };
+    return { candidate: {
+        source_url: base,
+        document_title: hit.document_title || null,
+        audience: hit.audience || null,
+        source: hit.source || null,
+        similarity: 1,
+        exact: true
+    } };
+};
 
+exports.findReplacementCandidate = async (content, sourceUrl) => {
     const pieces = chunkText(content);
     if (pieces.length === 0) return { candidate: null };
     const probe = await getEmb(pieces[0]);
