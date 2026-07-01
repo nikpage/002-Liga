@@ -164,8 +164,8 @@
         }
 
         .contact-source-photo {
-            width: 32px;
-            height: 32px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             object-fit: cover;
             flex-shrink: 0;
@@ -237,9 +237,10 @@
             if (msgs.lastChild) msgs.lastChild.scrollIntoView();
         }
 
-        function downloadFile(filename, text) {
+        function downloadFile(filename, text, mime) {
+            mime = mime || 'text/plain';
             const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('href', `data:${mime};charset=utf-8,` + encodeURIComponent(text));
             element.setAttribute('download', filename);
             element.style.display = 'none';
             document.body.appendChild(element);
@@ -247,10 +248,36 @@
             document.body.removeChild(element);
         }
 
+        // Exports render through marked.parse (same as the on-screen chat) so
+        // contact photos show up as actual images, not raw markdown/HTML text —
+        // a plain .txt file can't display an <img>.
+        function buildExportHtml(title, bodyHtml) {
+            return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.5; max-width: 700px; margin: 0 auto; padding: 16px; color: #222; }
+    img { max-width: 100%; }
+    .contact-source { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+    .contact-source-photo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .msg-block { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #ddd; }
+    .msg-role { font-weight: bold; text-transform: uppercase; font-size: 12px; color: #666; margin-bottom: 4px; }
+</style>
+</head>
+<body>${bodyHtml}</body>
+</html>`;
+        }
+
         function downloadHistory() {
             if (chatHistory.length === 0) return;
-            const text = chatHistory.map(msg => `[${msg.role.toUpperCase()}]\n${msg.content}\n-------------------`).join('\n\n');
-            downloadFile('chat_historie.txt', text);
+            const body = chatHistory.map(msg => {
+                const rendered = msg.role === 'assistant' ? marked.parse(normalizeAnswer(msg.content)) : marked.parse(msg.content);
+                return `<div class="msg-block"><div class="msg-role">${msg.role}</div>${rendered}</div>`;
+            }).join('\n');
+            downloadFile('chat_historie.html', buildExportHtml('Chat historie', body), 'text/html');
         }
 
         function normalizeAnswer(md, sources) {
@@ -326,7 +353,7 @@
             const dlReplyBtn = document.createElement('button');
             dlReplyBtn.className = 'tool-btn';
             dlReplyBtn.innerHTML = '💾 Odpověď';
-            dlReplyBtn.onclick = () => downloadFile('odpoved.txt', content);
+            dlReplyBtn.onclick = () => downloadFile('odpoved.html', buildExportHtml('Odpověď', marked.parse(content)), 'text/html');
 
             const dlChatBtn = document.createElement('button');
             dlChatBtn.className = 'tool-btn';
