@@ -43,7 +43,8 @@ async function getEmb(text, attempt = 1) {
 async function getAnswerGoogle(history, prompt) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.google.chatModel}:generateContent?key=${cfg.key}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // See getEmb: avoids node-fetch v2's ERR_STREAM_PREMATURE_CLOSE on Google's gzip responses.
+    headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'identity' },
     body: JSON.stringify({
       contents: [
         ...history.map(h => ({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.content }] })),
@@ -142,7 +143,7 @@ async function getGoogleAccessToken(serviceAccountJson) {
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept-Encoding": "identity" },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
   });
 
@@ -157,7 +158,7 @@ async function getTTS(text) {
   }
   const apiKeyOrJson = config.google.ttsKey;
   let url = `https://texttospeech.googleapis.com/v1/text:synthesize`;
-  let headers = { 'Content-Type': 'application/json' };
+  let headers = { 'Content-Type': 'application/json', 'Accept-Encoding': 'identity' };
 
   // Check if it's a JSON Service Account Key (starts with {)
   if (apiKeyOrJson && apiKeyOrJson.trim().startsWith('{')) {
