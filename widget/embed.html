@@ -303,8 +303,30 @@
             return md.trim();
         }
 
+        let currentTtsAudio = null;
+        let ttsOriginalHtml = null;
+
+        function stopTtsPlayback() {
+            const btn = document.getElementById('ttsBtn');
+            if (currentTtsAudio) {
+                currentTtsAudio.pause();
+                currentTtsAudio = null;
+            }
+            if (ttsOriginalHtml !== null) {
+                btn.innerHTML = ttsOriginalHtml;
+                ttsOriginalHtml = null;
+            }
+            btn.disabled = false;
+        }
+
         async function playLastMessage() {
             const btn = document.getElementById('ttsBtn');
+
+            if (currentTtsAudio) {
+                stopTtsPlayback();
+                return;
+            }
+
             if (btn.disabled) return;
 
             const assistantMsgs = chatHistory.filter(m => m.role === 'assistant');
@@ -312,7 +334,7 @@
 
             const lastMsgContent = assistantMsgs[assistantMsgs.length - 1].content;
 
-            const originalText = btn.innerHTML;
+            ttsOriginalHtml = btn.innerHTML;
             btn.innerHTML = '⏳';
             btn.disabled = true;
 
@@ -327,24 +349,26 @@
 
                 const blob = await res.blob();
                 const audio = new Audio(URL.createObjectURL(blob));
+                currentTtsAudio = audio;
 
-                btn.innerHTML = '🔊';
+                btn.innerHTML = '⏹ Zastavit';
+                btn.disabled = false;
                 audio.play();
 
                 audio.onended = () => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
+                    stopTtsPlayback();
                 };
 
                 audio.onerror = () => {
-                    throw new Error("Playback error");
+                    stopTtsPlayback();
                 };
 
             } catch (e) {
                 console.error(e);
                 btn.innerHTML = '❌';
                 setTimeout(() => {
-                    btn.innerHTML = originalText;
+                    btn.innerHTML = ttsOriginalHtml;
+                    ttsOriginalHtml = null;
                     btn.disabled = false;
                 }, 2000);
             }
