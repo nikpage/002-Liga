@@ -133,9 +133,15 @@
         }
 
         #ttsBtn {
-            background-image: url("/widget/assets/btn-read-answer.png");
             flex: 1; height: 45px;
+            background-color: #1d2a5e;
+            border-radius: 22px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            font-family: "Comic Sans MS", "Segoe Print", cursive;
+            font-size: 15px; font-weight: bold; color: #fff;
         }
+        #ttsBtn:hover:not(:disabled) { background-color: #26377a; }
+        #ttsBtn svg { flex-shrink: 0; }
 
         #newChatBtn {
             background-image: url("/widget/assets/btn-new-chat.png");
@@ -178,7 +184,7 @@
             </div>
             <div class="controls-row">
                 <button id="newChatBtn" class="img-btn" onclick="startNewChat()" aria-label="Nový chat">Nový chat</button>
-                <button id="ttsBtn" class="img-btn" onclick="playLastMessage()" title="Přečíst poslední odpověď" aria-label="Přečti odpověď">Přečti odpověď</button>
+                <button id="ttsBtn" class="img-btn" onclick="playLastMessage()" title="Přečíst poslední odpověď" aria-label="Přečti odpověď"><svg id="ttsBtnIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="#fff" stroke="none"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>Přečti odpověď</button>
             </div>
         </div>
     </div>
