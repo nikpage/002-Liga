@@ -139,8 +139,9 @@ exports.listChunks = async (search, offset = 0, limit = 50, filters = [], range 
 // Default browse: documents added/changed in the last `days`, newest first,
 // grouped and paginated by document. No search term needed — this is what the
 // user sees when they open the tab.
-exports.listRecentDocuments = async (offset = 0, limit = 20, filters = [], days = 30) => {
+exports.listRecentDocuments = async (offset = 0, limit = 20, filters = [], days = 30, range = {}) => {
     const orFilter = buildOrFilter(filters);
+    const { from, to } = range;
     const since = new Date(Date.now() - days * 86400000).toISOString();
     return searchGrouped(() => {
         let q = supabase.from(TABLE).select(CHUNK_COLS)
@@ -148,6 +149,7 @@ exports.listRecentDocuments = async (offset = 0, limit = 20, filters = [], days 
             .order('created_at', { ascending: false })
             .limit(2000);
         if (orFilter) q = q.or(orFilter);
+        q = applyRange(q, from, to);
         return q;
     }, offset, limit);
 };

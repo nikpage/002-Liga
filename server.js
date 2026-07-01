@@ -623,9 +623,9 @@ app.get('/api/admin/chunks', async (req, res) => {
 // Default browse: most-recently added/changed documents (last 30 days).
 app.get('/api/admin/documents/recent', async (req, res) => {
     try {
-        const { offset, limit, filters, days } = req.query;
+        const { offset, limit, filters, days, from, to } = req.query;
         const filterArr = filters ? String(filters).split(',').filter(Boolean) : [];
-        const result = await adminChunks.listRecentDocuments(parseInt(offset) || 0, parseInt(limit) || 20, filterArr, parseInt(days) || 30);
+        const result = await adminChunks.listRecentDocuments(parseInt(offset) || 0, parseInt(limit) || 20, filterArr, parseInt(days) || 30, { from, to });
         res.json(result);
     } catch (e) { adminError(res, e, 'recent'); }
 });

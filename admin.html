@@ -460,7 +460,11 @@
             document.getElementById('tab-' + name).classList.add('active');
             document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
             // Load the document list the first time the tab is opened.
-            if (name === 'kb' && !kbLoadedOnce) { kbLoadedOnce = true; kbLoad(); }
+            if (name === 'kb' && !kbLoadedOnce) {
+                kbLoadedOnce = true;
+                document.getElementById('kbTo').value = new Date().toISOString().slice(0, 10);
+                kbLoad();
+            }
         }
 
         // ── Knowledge base ───────────────────────────────────────────────────────
@@ -514,7 +518,7 @@
         function kbClearSearch() {
             document.getElementById('kbSearch').value = '';
             document.getElementById('kbFrom').value = '';
-            document.getElementById('kbTo').value = '';
+            document.getElementById('kbTo').value = new Date().toISOString().slice(0, 10);
             kbPage = 0; kbLoad();
         }
 
@@ -531,7 +535,7 @@
                 const dateQ = `${from ? '&from=' + from : ''}${to ? '&to=' + to : ''}`;
                 const url = searching
                     ? `/api/admin/chunks?search=${encodeURIComponent(search)}&offset=${kbPage * pageSize}&limit=${pageSize}&filters=${encodeURIComponent(filters)}${dateQ}`
-                    : `/api/admin/documents/recent?offset=${kbPage * pageSize}&limit=${pageSize}&filters=${encodeURIComponent(filters)}`;
+                    : `/api/admin/documents/recent?offset=${kbPage * pageSize}&limit=${pageSize}&filters=${encodeURIComponent(filters)}${dateQ}`;
                 const { documents, total } = await kbApi('GET', url);
                 kbResults = documents || [];
                 kbPageSize = pageSize;
