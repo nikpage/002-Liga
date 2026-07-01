@@ -236,12 +236,59 @@ function detectContactBlock(text) {
   return null;
 }
 
-function appendContactToChunks(chunks, pageContact) {
+function appendContactToChunks(chunks, pageContact, contactPhoto) {
   if (!pageContact) return chunks;
   return chunks.map(c => {
-    if (c.content.includes(pageContact)) return c;
-    return { ...c, content: `${c.content}\nKontakt:\n${pageContact}` };
+    const withText = c.content.includes(pageContact)
+      ? c
+      : { ...c, content: `${c.content}\nKontakt:\n${pageContact}` };
+    if (!contactPhoto) return withText;
+    return {
+      ...withText,
+      contact_name: contactPhoto.name || null,
+      contact_image_url: contactPhoto.imageUrl || null
+    };
   });
+}
+
+// Finds the nearest photo for a detected contact block. The site's page
+// builder consistently renders a staff photo as a ".b-img" block immediately
+// preceding the ".b-text" block holding that person's name/phone/email — so
+// once the innermost text node containing both is found, the image is
+// reached by walking up to the ancestor level where a previous sibling exists.
+function findContactImage($, contactEl) {
+  let node = contactEl;
+  for (let depth = 0; depth < 5; depth++) {
+    if (!node || node.length === 0) break;
+    const prev = node.prev();
+    if (prev.length) {
+      const img = prev.is('img') ? prev : prev.find('img').first();
+      if (img.length) return img.attr('src') || null;
+    }
+    node = node.parent();
+  }
+  return null;
+}
+
+function findContactPhoto($, root) {
+  let match = null;
+  $(root).find('div, p, li, section, article').each((_, el) => {
+    if (match) return;
+    const $el = $(el);
+    const text = $el.text().replace(/\s+/g, ' ').trim();
+    if (!CONTACT_PHONE_RX.test(text) || !CONTACT_EMAIL_RX.test(text)) return;
+    // keep only the innermost element matching both — skip if a child already does
+    const hasMatchingChild = $el.children().toArray().some(child => {
+      const childText = $(child).text().replace(/\s+/g, ' ').trim();
+      return CONTACT_PHONE_RX.test(childText) && CONTACT_EMAIL_RX.test(childText);
+    });
+    if (hasMatchingChild) return;
+    const imageUrl = findContactImage($, $el);
+    if (!imageUrl) return;
+    const name = $el.find('strong, b').first().text().replace(/\s+/g, ' ').trim();
+    match = { name: name || null, imageUrl };
+  });
+  return match;
 }
 
 const YT_PATTERNS = [
@@ -302,12 +349,14 @@ async function processPage(pageUrl) {
   const cleanedText = blocks.map(b => b.text).join('\n');
 
   const pageContact = detectContactBlock(cleanedText);
+  const contactPhoto = pageContact ? findContactPhoto($, root) : null;
 
   const allTextChunks = chunkBlocks(blocks, pageUrl);
   const keptTextChunks = allTextChunks.filter(c => c.content.length >= 100);
   const textChunks = appendContactToChunks(
     keptTextChunks.map(c => ({ ...c, document_title: title })),
-    pageContact
+    pageContact,
+    contactPhoto
   );
 
   const videoResults = [];
@@ -324,7 +373,8 @@ async function processPage(pageUrl) {
       const keptTrans = rawTrans.filter(c => c.content.length >= 100);
       const taggedTrans = appendContactToChunks(
         keptTrans.map(c => ({ ...c, document_title: `${title} (video)` })),
-        pageContact
+        pageContact,
+        contactPhoto
       );
       transcriptChunks = transcriptChunks.concat(taggedTrans);
     }
@@ -383,7 +433,9 @@ async function upsertChunks(pageUrl, chunks) {
       audience: AUDIENCE,
       source: 'web',
       downloads: null,
-      chunk_index: i
+      chunk_index: i,
+      contact_name: c.contact_name || null,
+      contact_image_url: c.contact_image_url || null
     });
   }
 

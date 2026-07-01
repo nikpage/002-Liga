@@ -4,6 +4,12 @@ const { logQA: logQAEway } = require('./eway-crm');
 const { buildPublicPrompt, buildPoradnaPrompt } = require('./prompts');
 const { buildEventsNote } = require('./events');
 
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 exports.search = async (payload) => {
   const startTime = Date.now();
   try {
@@ -58,7 +64,9 @@ exports.search = async (payload) => {
         seenUrls.add(chunk.source_url);
         sources.push({
           title: (chunk.document_title || "Zdroj").replace(/\.[^/.]+$/, ""),
-          url: chunk.source_url
+          url: chunk.source_url,
+          contactName: chunk.contact_name || null,
+          contactImageUrl: chunk.contact_image_url || null
         });
       }
     });
@@ -70,7 +78,14 @@ exports.search = async (payload) => {
 
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
-      sources.forEach((s, i) => { answer += `${i + 1}. [${s.title}](${s.url})\n`; });
+      sources.forEach((s, i) => {
+        if (s.contactImageUrl) {
+          const name = escapeHtml(s.contactName || s.title);
+          answer += `${i + 1}. <span class="contact-source"><img src="${s.contactImageUrl}" alt="${name}" class="contact-source-photo"> <strong>${name}</strong> — <a href="${s.url}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a></span>\n`;
+        } else {
+          answer += `${i + 1}. [${s.title}](${s.url})\n`;
+        }
+      });
     }
 
     // Fire-and-forget: log Q&A to database

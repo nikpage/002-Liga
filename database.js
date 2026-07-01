@@ -97,7 +97,7 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
     if (ids.length) {
       const { data: metaRows, error: metaError } = await supabase
         .from('chunks')
-        .select('id, audience, event_date')
+        .select('id, audience, event_date, contact_name, contact_image_url')
         .in('id', ids);
       if (metaError) {
         console.error("CHUNK META LOOKUP ERROR:", metaError);
@@ -105,7 +105,15 @@ exports.getFullContext = async (embedding, query, audienceFilter = null) => {
         const metaById = new Map(metaRows.map(r => [r.id, r]));
         chunks = chunks.map(c => {
           const meta = metaById.get(c.id);
-          return meta ? { ...c, audience: meta.audience, event_date: meta.event_date } : c;
+          return meta
+            ? {
+                ...c,
+                audience: meta.audience,
+                event_date: meta.event_date,
+                contact_name: meta.contact_name,
+                contact_image_url: meta.contact_image_url
+              }
+            : c;
         });
       }
     }
