@@ -3,18 +3,30 @@ const config = require("./config");
 const { google: cfg } = require("./config");
 const crypto = require('crypto');
 
-async function getEmb(text) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: `models/${cfg.embModel}`,
-      content: { parts: [{ text }] },
-      outputDimensionality: 1536
-    })
-  });
+async function getEmb(text, attempt = 1) {
+  const MAX_ATTEMPTS = 3;
+  let res, data;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: `models/${cfg.embModel}`,
+        content: { parts: [{ text }] },
+        outputDimensionality: 1536
+      })
+    });
+    data = await res.json();
+  } catch (err) {
+    // Google's API intermittently cuts the gzip stream short (ERR_STREAM_PREMATURE_CLOSE).
+    // Transient — retry a couple of times before giving up.
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, 300 * attempt));
+      return getEmb(text, attempt + 1);
+    }
+    throw err;
+  }
 
-  const data = await res.json();
   if (!res.ok) throw new Error(`Google Embedding Error: ${data.error?.message || res.statusText}`);
   if (!data.embedding) throw new Error("Google API returned no embedding.");
 
