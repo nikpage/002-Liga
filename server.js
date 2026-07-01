@@ -55,6 +55,9 @@ function cleanTextForTTS(text) {
     const footerRegex = /\n\n---\n# (?:📄 Zdroje|📥 Ke stažení)[\s\S]*$/;
     text = text.replace(footerRegex, '');
 
+    // 1b. Strip inline contact-photo <img> tags injected into the answer body
+    text = text.replace(/<[^>]+>/g, '');
+
     // 2. Remove Markdown Links [Text](URL) -> Text
     text = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
 

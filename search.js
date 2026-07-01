@@ -71,6 +71,21 @@ exports.search = async (payload) => {
       }
     });
 
+    // Show each cited contact's photo inline in the answer body itself (not
+    // just the Zdroje list) — insert it next to the first mention of their
+    // name in the generated text.
+    const injectedContacts = new Set();
+    sources.forEach((s) => {
+      if (!s.contactImageUrl || !s.contactName || injectedContacts.has(s.contactName)) return;
+      const escapedName = s.contactName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const nameRx = new RegExp(escapedName);
+      if (nameRx.test(answer)) {
+        const photoTag = `<img src="${s.contactImageUrl}" alt="${escapeHtml(s.contactName)}" class="contact-source-photo" style="display:inline-block;vertical-align:middle;margin-right:6px;">`;
+        answer = answer.replace(nameRx, `${photoTag}${s.contactName}`);
+        injectedContacts.add(s.contactName);
+      }
+    });
+
     if (downloads.length > 0) {
       answer += `\n\n---\n# 📥 Ke stažení\n\n`;
       downloads.forEach(d => { answer += `* [${d.title}](${d.url})\n`; });
