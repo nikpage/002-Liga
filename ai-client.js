@@ -9,7 +9,10 @@ async function getEmb(text, attempt = 1) {
   try {
     res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.embModel}:embedContent?key=${cfg.key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Google's gzip response is intermittently truncated mid-stream
+      // (ERR_STREAM_PREMATURE_CLOSE) under node-fetch v2. Request uncompressed
+      // output so there's no gzip stream to truncate.
+      headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'identity' },
       body: JSON.stringify({
         model: `models/${cfg.embModel}`,
         content: { parts: [{ text }] },
