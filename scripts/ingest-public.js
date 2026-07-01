@@ -270,9 +270,30 @@ function findContactImage($, contactEl) {
   return null;
 }
 
+// The name is usually inside the contact block itself (<strong>/<b>), but some
+// page layouts put it in a sibling heading instead (e.g. a preceding <h3> with
+// the phone/email in a separate <h4>) — walk the same ancestor chain used for
+// the photo to find it.
+function findContactName($, contactEl) {
+  const direct = contactEl.find('strong, b').first().text().replace(/\s+/g, ' ').trim();
+  if (direct) return direct;
+  let node = contactEl;
+  for (let depth = 0; depth < 5; depth++) {
+    if (!node || node.length === 0) break;
+    const prev = node.prev();
+    if (prev.length) {
+      const heading = prev.is('h1,h2,h3,h4,strong,b') ? prev : prev.find('h1,h2,h3,h4,strong,b').first();
+      const t = heading.text ? heading.text().replace(/\s+/g, ' ').trim() : '';
+      if (t) return t;
+    }
+    node = node.parent();
+  }
+  return null;
+}
+
 function findContactPhoto($, root) {
   let match = null;
-  $(root).find('div, p, li, section, article').each((_, el) => {
+  $(root).find('div, p, li, section, article, h1, h2, h3, h4').each((_, el) => {
     if (match) return;
     const $el = $(el);
     const text = $el.text().replace(/\s+/g, ' ').trim();
@@ -285,7 +306,7 @@ function findContactPhoto($, root) {
     if (hasMatchingChild) return;
     const imageUrl = findContactImage($, $el);
     if (!imageUrl) return;
-    const name = $el.find('strong, b').first().text().replace(/\s+/g, ' ').trim();
+    const name = findContactName($, $el);
     match = { name: name || null, imageUrl };
   });
   return match;
