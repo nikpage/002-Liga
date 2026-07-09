@@ -74,15 +74,17 @@ exports.search = async (payload) => {
     // Show each cited contact's photo inline in the answer body itself (not
     // just the Zdroje list) — insert it next to the first mention of their
     // name in the generated text.
+    // Dedup by the contact PHOTO (same person can be cited under slightly
+    // different names, e.g. "Jana" vs "Jana Irman" — they share one photo).
     const injectedContacts = new Set();
     sources.forEach((s) => {
-      if (!s.contactImageUrl || !s.contactName || injectedContacts.has(s.contactName)) return;
+      if (!s.contactImageUrl || !s.contactName || injectedContacts.has(s.contactImageUrl)) return;
       const escapedName = s.contactName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const nameRx = new RegExp(escapedName);
       if (nameRx.test(answer)) {
         const photoTag = `<img src="${s.contactImageUrl}" alt="${escapeHtml(s.contactName)}" class="contact-source-photo" style="display:inline-block;vertical-align:middle;margin-right:6px;">`;
         answer = answer.replace(nameRx, `${photoTag}${s.contactName}`);
-        injectedContacts.add(s.contactName);
+        injectedContacts.add(s.contactImageUrl);
       }
     });
 
@@ -93,8 +95,10 @@ exports.search = async (payload) => {
 
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
+      const shownContactPhotos = new Set();
       sources.forEach((s, i) => {
-        if (s.contactImageUrl) {
+        if (s.contactImageUrl && !shownContactPhotos.has(s.contactImageUrl)) {
+          shownContactPhotos.add(s.contactImageUrl);
           const name = escapeHtml(s.contactName || s.title);
           answer += `${i + 1}. <span class="contact-source"><img src="${s.contactImageUrl}" alt="${name}" class="contact-source-photo"> <strong>${name}</strong> — <a href="${s.url}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a></span>\n`;
         } else {
