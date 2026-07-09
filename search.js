@@ -95,15 +95,8 @@ exports.search = async (payload) => {
 
     if (sources.length > 0) {
       answer += `\n\n---\n# 📄 Zdroje\n\n`;
-      const shownContactPhotos = new Set();
       sources.forEach((s, i) => {
-        if (s.contactImageUrl && !shownContactPhotos.has(s.contactImageUrl)) {
-          shownContactPhotos.add(s.contactImageUrl);
-          const name = escapeHtml(s.contactName || s.title);
-          answer += `${i + 1}. <span class="contact-source"><img src="${s.contactImageUrl}" alt="${name}" class="contact-source-photo"> <strong>${name}</strong> — <a href="${s.url}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a></span>\n`;
-        } else {
-          answer += `${i + 1}. [${s.title}](${s.url})\n`;
-        }
+        answer += `${i + 1}. [${s.title}](${s.url})\n`;
       });
     }
 
