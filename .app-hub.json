@@ -1,0 +1,18 @@
+{
+  "name": "002-liga",
+  "spend_project_key": "liga",
+  "client": "Liga vozíčkářů",
+  "status": "active",
+  "railway_project_id": "784be72e-a257-452f-a09e-fba3adaf65ab",
+  "railway_account": "pod.one@gmail.com",
+  "gcp_project_id": "gen-lang-client-0651826784",
+  "supabase_project_id": null,
+  "supabase_account": "ainikpage@gmail.com",
+  "supabase_tier": "paid",
+  "vendors": ["gemini", "railway"],
+  "gemini_models": {
+    "gemini-2.5-flash": "chat (config.js)",
+    "gemini-embedding-001": "embeddings (config.js)"
+  },
+  "notes": "Railway project name is 'liga-brain' (Q&A assistant)."
+}
